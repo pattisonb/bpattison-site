@@ -1,6 +1,7 @@
+// SubMenu.js
 import React, { useState } from 'react';
+import styled, { css } from 'styled-components';
 import { Link } from 'react-router-dom';
-import styled from 'styled-components';
 
 const SidebarLink = styled(Link)`
   display: flex;
@@ -18,6 +19,13 @@ const SidebarLink = styled(Link)`
     border-left: 4px solid #632ce4;
     cursor: pointer;
   }
+
+  ${({ isCurrentPage }) =>
+    isCurrentPage &&
+    css`
+      background: #252831;
+      border-left: 4px solid #632ce4;
+    `}
 `;
 
 const SidebarMenu = styled.span`
@@ -36,6 +44,13 @@ const SidebarMenu = styled.span`
     border-left: 4px solid #632ce4;
     cursor: pointer;
   }
+
+  ${({ isCurrentPage }) =>
+    isCurrentPage &&
+    css`
+      background: #252831;
+      border-left: 4px solid #632ce4;
+    `}
 `;
 
 const SidebarLabel = styled.span`
@@ -56,51 +71,63 @@ const DropdownLink = styled(Link)`
     background: #632ce4;
     cursor: pointer;
   }
+
+  ${({ isCurrentPage }) =>
+    isCurrentPage &&
+    css`
+      background: #632ce4;
+    `}
 `;
 
-const SubMenu = ({ item }) => {
+const SubMenu = ({ item, closeSidebar, isCurrentPage }) => {
   const [subnav, setSubnav] = useState(false);
 
   const showSubnav = () => setSubnav(!subnav);
 
+  const handleSubmenuClick = () => {
+    if (item.subNav) {
+      showSubnav();
+    } else {
+      closeSidebar();
+    }
+  };
+
   return (
     <>
-        {
-            item.subNav ?
-            <SidebarMenu onClick={item.subNav && showSubnav}>
-            <div>
-              {item.icon}
-              <SidebarLabel>{item.title}</SidebarLabel>
-            </div>
-            <div>
-              {item.subNav && subnav
-                ? item.iconOpened
-                : item.subNav
-                ? item.iconClosed
-                : null}
-            </div>
-          </SidebarMenu>
-          :
-          <SidebarLink to={item.path} onClick={item.subNav && showSubnav}>
+      {item.subNav ? (
+        <SidebarMenu onClick={handleSubmenuClick} isCurrentPage={isCurrentPage}>
           <div>
             {item.icon}
             <SidebarLabel>{item.title}</SidebarLabel>
           </div>
+          <div>{item.subNav && subnav ? item.iconOpened : item.iconClosed}</div>
+        </SidebarMenu>
+      ) : (
+        <SidebarLink
+          to={item.path}
+          onClick={closeSidebar}
+          isCurrentPage={isCurrentPage}
+        >
           <div>
-            {item.subNav && subnav
-              ? item.iconOpened
-              : item.subNav
-              ? item.iconClosed
-              : null}
+            {item.icon}
+            <SidebarLabel>{item.title}</SidebarLabel>
           </div>
+          <div>{item.subNav && subnav ? item.iconOpened : item.iconClosed}</div>
         </SidebarLink>
-        }
+      )}
       {subnav &&
-        item.subNav.map((item, index) => {
+        item.subNav.map((subItem, index) => {
+          const isSubCurrentPage = subItem.path === window.location.pathname;
           return (
-            <DropdownLink to={item.path} target = {item.target} key={index}>
-              {item.icon}
-              <SidebarLabel>{item.title}</SidebarLabel>
+            <DropdownLink
+              to={subItem.path}
+              target={subItem.target}
+              key={index}
+              onClick={closeSidebar}
+              isCurrentPage={isSubCurrentPage}
+            >
+              {subItem.icon}
+              <SidebarLabel>{subItem.title}</SidebarLabel>
             </DropdownLink>
           );
         })}

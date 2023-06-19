@@ -3,6 +3,8 @@ import * as AiIcons from 'react-icons/ai';
 import * as IoIcons from 'react-icons/io';
 import * as RiIcons from 'react-icons/ri';
 import {ReactComponent as AnimMainLogo} from "../assets/AnimMainLogo.svg"
+import {ReactComponent as GitHubLogo} from "../assets/GitHubLogo.svg"
+
 
 export const SidebarData = [
   {
@@ -26,17 +28,11 @@ export const SidebarData = [
         target: "_blank"
       },
       {
-        title: 'Project 2',
-        path: '/projects/projects2',
-        icon: <IoIcons.IoIosPaper />,
+        title: 'GitHub',
+        path: 'https://github.com/pattisonb/',
+        icon: <GitHubLogo style={{ height: 20 }}/>,
         cName: 'sub-nav',
-        target: ""
-      },
-      {
-        title: 'Project 3',
-        path: '/projects/projects3',
-        icon: <IoIcons.IoIosPaper />,
-        target: ""
+        target: "_blank"
       }
     ]
 }

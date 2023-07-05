@@ -1,0 +1,67 @@
+.tracks-container {
+    display: flex;
+    justify-content: center;
+  }
+  
+  .tracks-list {
+    margin-top: 10px;
+    flex-direction: column;
+  }
+
+  .dropdown {
+    display: inline-block;
+    position: relative;
+  }
+  
+  .dropdown-select {
+    margin-left: 20px;
+    padding: 5px 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  
+  .dropdown-options {
+    display: none;
+    position: absolute;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 5px 10px;
+    top: 100%;
+    left: 0;
+    min-width: 120px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  
+  .dropdown-options a {
+    display: block;
+    padding: 5px 0;
+    color: #333;
+    text-decoration: none;
+  }
+  
+  .dropdown:hover .dropdown-options {
+    display: block;
+  }
+  
+  
+  @media (max-width: 768px) {
+    .tracks-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+  
+    .tracks-container {
+      flex-direction: column;
+      justify-content: center;
+    }
+  
+    .tracks-list > * {
+      flex-basis: 48%;
+    }
+  }
+  

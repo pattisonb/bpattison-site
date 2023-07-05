@@ -59,6 +59,7 @@ const SidebarLabel = styled.span`
   color: #fff;
   text-decoration: none;
   cursor: pointer;
+  font-size: 16px
 `;
 
 const CloseIcon = styled(AiIcons.AiOutlineClose)`

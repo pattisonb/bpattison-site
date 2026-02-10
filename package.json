@@ -49,6 +49,7 @@
     ]
   },
   "devDependencies": {
+    "typescript": "^4.9.5",
     "webpack": "^5.88.1"
   }
 }

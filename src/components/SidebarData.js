@@ -36,7 +36,7 @@ export const SidebarData = [
         target: "_blank",
       },
       {
-        title: "Spotify API",
+        title: "My Spotify Stats",
         path: "/projects/spotify",
         icon: <SpotifyLogo style={{ height: 20 }} />,
         cName: "sub-nav",

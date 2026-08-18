@@ -15,28 +15,27 @@ import RecentlyPlayedElement from "./RecentlyPlayedElement";
 import TopArtistElement from "./TopArtistElement";
 import "../styles/Spotify.css";
 
-const TIME_OPTIONS = ["Last 4 Weeks", "Last 6 Months", "All Time"];
+const timeOptions = ["Last 4 Weeks", "Last 6 Months", "All Time"];
 
-// Small self-contained dropdown so the markup below stays tidy.
 function TimeDropdown({ selected, onSelect, open, setOpen }) {
   return (
-    <div className="sp-dropdown">
+    <div className="dropdown">
       <button
         type="button"
-        className="sp-dropdown__btn"
+        className="dropdown-select"
         onClick={() => setOpen(!open)}
       >
         {selected}
-        <FaChevronDown className={open ? "is-open" : ""} />
+        <FaChevronDown className={open ? "open" : ""} />
       </button>
       {open && (
-        <div className="sp-dropdown__menu">
-          {TIME_OPTIONS.map((option) => (
+        <div className="dropdown-options">
+          {timeOptions.map((option) => (
             <button
               key={option}
               type="button"
               className={
-                "sp-dropdown__item" + (option === selected ? " is-active" : "")
+                "dropdown-option" + (option === selected ? " selected" : "")
               }
               onClick={() => onSelect(option)}
             >
@@ -94,9 +93,6 @@ function Spotify() {
           topArtistItemsShort,
         ] = results;
 
-        // Any of these can come back undefined / error-shaped when the
-        // Spotify token refresh or an API call fails — don't crash, just
-        // show what we have and surface a message if we have nothing.
         const recentItems = recentlyPlayedItems?.items || [];
         const trackItems = topTrackItemsShort?.items || [];
         const artistItems = topArtistItemsShort?.items || [];
@@ -107,21 +103,18 @@ function Spotify() {
         setTopArtists(artistItems);
 
         if (!recentItems.length && !trackItems.length && !artistItems.length) {
-          console.error(
-            "Spotify API returned no data. Raw responses:",
-            { recentlyPlayedItems, topTrackItemsShort, topArtistItemsShort }
-          );
-          setError(
-            "Couldn't load listening data from Spotify. The connection may need to be re-authorized — check the browser console for the exact API error."
-          );
+          console.error("Spotify API returned no data:", {
+            recentlyPlayedItems,
+            topTrackItemsShort,
+            topArtistItemsShort,
+          });
+          setError("Couldn't load data from Spotify right now.");
         }
         setLoading(false);
       })
-      .catch((err) => {
-        console.error("Error loading Spotify data:", err);
-        setError(
-          "Couldn't reach Spotify right now. Check the browser console for details."
-        );
+      .catch((error) => {
+        console.error("Error fetching data:", error);
+        setError("Couldn't load data from Spotify right now.");
         setLoading(false);
       });
   }, []);
@@ -162,9 +155,9 @@ function Spotify() {
       setTopTracks(tracks?.items || []);
     };
 
-    fetchTop().catch((err) =>
-      console.error("Error loading top tracks:", err)
-    );
+    fetchTop().catch((error) => {
+      console.error("Error fetching data:", error);
+    });
   }, [selectedTrackOption]);
 
   useEffect(() => {
@@ -203,9 +196,9 @@ function Spotify() {
       setTopArtists(artists?.items || []);
     };
 
-    fetchTop().catch((err) =>
-      console.error("Error loading top artists:", err)
-    );
+    fetchTop().catch((error) => {
+      console.error("Error fetching data:", error);
+    });
   }, [selectedArtistOption]);
 
   const getRecentlyPlayedTracks = () => {
@@ -230,11 +223,11 @@ function Spotify() {
     <div className="spotify-page">
       <section className="spotify-hero">
         <div className="container">
-          <span className="eyebrow spotify-eyebrow">
+          <span className="section-label spotify-label">
             <FaSpotify /> Spotify
           </span>
-          <h1 className="spotify-hero__title">What I'm listening to</h1>
-          <p className="spotify-hero__sub">
+          <h1>What I'm listening to</h1>
+          <p>
             Pulled live from my Spotify: what's playing right now, recent plays,
             and my most-played tracks and artists.
           </p>
@@ -245,7 +238,7 @@ function Spotify() {
         {loading && (
           <div className="spotify-loading">
             <div className="spotify-spinner" />
-            <p>Loading listening data…</p>
+            <p>Loading...</p>
           </div>
         )}
 
@@ -272,8 +265,8 @@ function Spotify() {
             )}
 
             <div className="tracks-container">
-              <section className="tracks-panel">
-                <div className="tracks-panel__head">
+              <section className="tracks-column">
+                <div className="tracks-header">
                   <h2>Recently Played</h2>
                 </div>
                 <div className="tracks-list">
@@ -286,8 +279,8 @@ function Spotify() {
                 </div>
               </section>
 
-              <section className="tracks-panel">
-                <div className="tracks-panel__head">
+              <section className="tracks-column">
+                <div className="tracks-header">
                   <h2>Top Tracks</h2>
                   <TimeDropdown
                     selected={selectedTrackOption}
@@ -303,8 +296,8 @@ function Spotify() {
                 </div>
               </section>
 
-              <section className="tracks-panel">
-                <div className="tracks-panel__head">
+              <section className="tracks-column">
+                <div className="tracks-header">
                   <h2>Top Artists</h2>
                   <TimeDropdown
                     selected={selectedArtistOption}

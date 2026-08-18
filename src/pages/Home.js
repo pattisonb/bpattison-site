@@ -3,21 +3,20 @@ import { Link } from "react-router-dom";
 import { FaGithub, FaLinkedinIn, FaSpotify } from "react-icons/fa";
 import { FaArrowRight } from "react-icons/fa6";
 import ProjectCard from "../components/ProjectCard";
-import { projects } from "../data/projects";
+import { ProjectsData } from "../components/ProjectsData";
 import "../styles/Home.css";
 
 function Home() {
   return (
     <div className="home">
-      {/* ---------- Hero ---------- */}
       <section className="hero">
-        <div className="hero__glow" aria-hidden="true" />
-        <div className="container hero__inner">
-          <h1 className="hero__title">Hi, I'm Brian.</h1>
-          <p className="hero__role">
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="container hero-inner">
+          <h1 className="hero-title">Hi, I'm Brian.</h1>
+          <p className="hero-subtitle">
             I work with data, and I build small things on the side.
           </p>
-          <p className="hero__lead">
+          <p className="hero-text">
             My day job is in analytics. Everything else on this site is stuff I
             made on my own time, usually because I wanted it to exist. There's a
             page that shows what I'm currently playing on Spotify, a couple of
@@ -25,7 +24,7 @@ function Home() {
             around.
           </p>
 
-          <div className="hero__actions">
+          <div className="hero-buttons">
             <Link to="/projects" className="btn btn-primary">
               See my projects <FaArrowRight />
             </Link>
@@ -34,7 +33,7 @@ function Home() {
             </a>
           </div>
 
-          <div className="hero__socials">
+          <div className="hero-links">
             <a
               href="https://github.com/pattisonb/"
               target="_blank"
@@ -61,10 +60,9 @@ function Home() {
         </div>
       </section>
 
-      {/* ---------- Projects showcase ---------- */}
       <section className="section" id="projects">
         <div className="container">
-          <div className="showcase__head">
+          <div className="projects-header">
             <div>
               <h2 className="section-title">Things I've made</h2>
               <p className="section-sub">
@@ -72,13 +70,13 @@ function Home() {
                 rest live elsewhere.
               </p>
             </div>
-            <Link to="/projects" className="showcase__all">
+            <Link to="/projects" className="view-all">
               View all <FaArrowRight />
             </Link>
           </div>
 
           <div className="projects-grid">
-            {projects.map((project) => (
+            {ProjectsData.map((project) => (
               <ProjectCard key={project.title} project={project} />
             ))}
           </div>

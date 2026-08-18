@@ -1,42 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
-/* ============================================================
-   Design tokens — clean, modern, light
-   ============================================================ */
 :root {
   color-scheme: light;
 
-  /* Brand */
-  --brand: #4f46e5;          /* indigo */
+  --brand: #4f46e5;
   --brand-600: #4338ca;
   --brand-700: #3730a3;
-  --brand-soft: #eef2ff;     /* tinted surface */
-  --violet: #7c3aed;         /* nods to the old purple accent */
+  --brand-soft: #eef2ff;
+  --violet: #7c3aed;
 
-  /* Neutrals */
   --bg: #ffffff;
-  --bg-alt: #f8fafc;         /* section background */
+  --bg-alt: #f8fafc;
   --surface: #ffffff;
   --border: #e6e8ef;
   --border-strong: #d3d7e3;
 
-  --text: #0f172a;           /* slate-900 */
-  --text-soft: #475569;      /* slate-600 */
-  --text-muted: #94a3b8;     /* slate-400 */
+  --text: #0f172a;
+  --text-soft: #475569;
+  --text-muted: #94a3b8;
 
-  /* Accents used by feature pages */
   --spotify: #1db954;
   --gold: #f59e0b;
 
-  /* Navbar backdrop */
   --nav-bg: rgba(255, 255, 255, 0.8);
 
-  /* Elevation */
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-md: 0 6px 20px -6px rgba(15, 23, 42, 0.12);
   --shadow-lg: 0 20px 45px -20px rgba(79, 70, 229, 0.35);
 
-  /* Shape & rhythm */
   --radius-sm: 10px;
   --radius: 16px;
   --radius-lg: 24px;
@@ -47,9 +38,7 @@
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-/* ============================================================
-   Dark theme — toggled via data-theme on <html>
-   ============================================================ */
+/* Dark Mode */
 [data-theme="dark"] {
   color-scheme: dark;
 
@@ -118,9 +107,6 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* ============================================================
-   Reusable layout + component utilities
-   ============================================================ */
 .container {
   width: 100%;
   max-width: var(--maxw);
@@ -132,7 +118,7 @@ code {
   padding: 72px 0;
 }
 
-.eyebrow {
+.section-label {
   display: inline-block;
   font-size: 0.78rem;
   font-weight: 600;
@@ -151,7 +137,6 @@ code {
   max-width: 620px;
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -188,7 +173,6 @@ code {
   transform: translateY(-2px);
 }
 
-/* Pills / tags */
 .tag {
   display: inline-block;
   font-size: 0.72rem;
@@ -200,6 +184,7 @@ code {
   color: var(--brand-700);
 }
 
+/* Mobile Responsive */
 @media (max-width: 640px) {
   .section { padding: 52px 0; }
   .container { padding: 0 18px; }

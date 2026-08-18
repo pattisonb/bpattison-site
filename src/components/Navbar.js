@@ -8,7 +8,13 @@ import {
   FaMoon,
   FaSun,
 } from "react-icons/fa";
-import "./Navbar.css";
+import "../styles/Navbar.css";
+
+const navLinks = [
+  { label: "Home", to: "/" },
+  { label: "Projects", to: "/projects" },
+  { label: "Music", to: "/projects/spotify" },
+];
 
 const getInitialTheme = () => {
   const set = document.documentElement.getAttribute("data-theme");
@@ -16,19 +22,11 @@ const getInitialTheme = () => {
   try {
     const saved = localStorage.getItem("theme");
     if (saved) return saved;
-  } catch (e) {
-    // localStorage unavailable; fall through
-  }
+  } catch (e) {}
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
 };
-
-const navLinks = [
-  { label: "Home", to: "/" },
-  { label: "Projects", to: "/projects" },
-  { label: "Music", to: "/projects/spotify" },
-];
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
@@ -40,15 +38,12 @@ const Navbar = () => {
     document.documentElement.setAttribute("data-theme", theme);
     try {
       localStorage.setItem("theme", theme);
-    } catch (e) {
-      // localStorage unavailable; theme just won't persist
-    }
+    } catch (e) {}
   }, [theme]);
 
   const toggleTheme = () =>
     setTheme((t) => (t === "dark" ? "light" : "dark"));
 
-  // Close the mobile menu whenever the route changes.
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
@@ -61,28 +56,28 @@ const Navbar = () => {
   }, []);
 
   return (
-    <header className={`nav ${scrolled ? "nav--scrolled" : ""}`}>
-      <div className="nav__inner container">
-        <Link to="/" className="nav__brand" onClick={() => setOpen(false)}>
-          <span className="nav__mark">BP</span>
-          <span className="nav__name">Brian Pattison</span>
+    <header className={`nav ${scrolled ? "scrolled" : ""}`}>
+      <div className="nav-inner container">
+        <Link to="/" className="nav-brand" onClick={() => setOpen(false)}>
+          <span className="nav-logo">BP</span>
+          <span className="nav-name">Brian Pattison</span>
         </Link>
 
-        <nav className={`nav__links ${open ? "is-open" : ""}`}>
+        <nav className={`nav-links ${open ? "open" : ""}`}>
           {navLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
               end
               className={({ isActive }) =>
-                "nav__link" + (isActive ? " is-active" : "")
+                "nav-link" + (isActive ? " active" : "")
               }
             >
               {link.label}
             </NavLink>
           ))}
 
-          <div className="nav__socials">
+          <div className="nav-socials">
             <a
               href="https://github.com/pattisonb/"
               target="_blank"
@@ -102,9 +97,9 @@ const Navbar = () => {
           </div>
         </nav>
 
-        <div className="nav__right">
+        <div className="nav-right">
           <button
-            className="nav__theme"
+            className="theme-toggle"
             onClick={toggleTheme}
             aria-label={
               theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
@@ -115,7 +110,7 @@ const Navbar = () => {
           </button>
 
           <button
-            className="nav__toggle"
+            className="menu-toggle"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}

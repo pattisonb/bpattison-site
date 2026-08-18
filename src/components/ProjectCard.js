@@ -1,16 +1,16 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { FaArrowRight, FaArrowUpRightFromSquare } from "react-icons/fa6";
-import "./ProjectCard.css";
+import "../styles/ProjectCard.css";
 
 const ProjectCard = ({ project }) => {
   const { title, blurb, href, internal, tag, icon: Icon, accent } = project;
 
   const inner = (
     <>
-      <div className="pcard__top">
+      <div className="project-card-top">
         <span
-          className="pcard__icon"
+          className="project-icon"
           style={{
             background: `${accent}14`,
             color: accent,
@@ -20,9 +20,9 @@ const ProjectCard = ({ project }) => {
         </span>
         <span className="tag">{tag}</span>
       </div>
-      <h3 className="pcard__title">{title}</h3>
-      <p className="pcard__blurb">{blurb}</p>
-      <span className="pcard__cta">
+      <h3 className="project-title">{title}</h3>
+      <p className="project-blurb">{blurb}</p>
+      <span className="project-link">
         {internal ? "Explore" : "Visit"}
         {internal ? <FaArrowRight /> : <FaArrowUpRightFromSquare />}
       </span>
@@ -31,7 +31,7 @@ const ProjectCard = ({ project }) => {
 
   if (internal) {
     return (
-      <Link to={href} className="pcard">
+      <Link to={href} className="project-card">
         {inner}
       </Link>
     );
@@ -40,7 +40,7 @@ const ProjectCard = ({ project }) => {
   return (
     <a
       href={href}
-      className="pcard"
+      className="project-card"
       target="_blank"
       rel="noopener noreferrer"
     >

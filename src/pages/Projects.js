@@ -1,6 +1,6 @@
 import React from "react";
 import ProjectCard from "../components/ProjectCard";
-import { projects } from "../data/projects";
+import { ProjectsData } from "../components/ProjectsData";
 import "../styles/Projects.css";
 
 export const Projects = () => {
@@ -8,9 +8,9 @@ export const Projects = () => {
     <div className="projects-page">
       <section className="projects-hero">
         <div className="container">
-          <span className="eyebrow">Projects</span>
-          <h1 className="projects-hero__title">Things I've built</h1>
-          <p className="projects-hero__sub">
+          <span className="section-label">Projects</span>
+          <h1>Things I've built</h1>
+          <p>
             Side projects, data toys, and experiments. A few pull live data and
             run right here on the site; others live in their own homes on the
             web. Poke around.
@@ -21,7 +21,7 @@ export const Projects = () => {
       <section className="section projects-list">
         <div className="container">
           <div className="projects-grid">
-            {projects.map((project) => (
+            {ProjectsData.map((project) => (
               <ProjectCard key={project.title} project={project} />
             ))}
           </div>

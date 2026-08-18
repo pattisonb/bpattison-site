@@ -27,11 +27,11 @@ const Player = ({
   const link = live ? songUrl : lastSongUrl;
 
   return (
-    <div className={`np-card ${animate ? "is-in" : ""}`}>
-      <div className="np-card__art">
+    <div className={`now-playing ${animate ? "show" : ""}`}>
+      <div className="now-playing-art">
         <img src={image} alt={songTitle} />
         {live && (
-          <span className="np-bars" aria-hidden="true">
+          <span className="eq-bars" aria-hidden="true">
             <span />
             <span />
             <span />
@@ -40,15 +40,15 @@ const Player = ({
         )}
       </div>
 
-      <div className="np-card__body">
-        <span className={`np-status ${live ? "is-live" : ""}`}>
+      <div className="now-playing-info">
+        <span className={`play-status ${live ? "live" : ""}`}>
           {live ? "Now playing" : "Last played"}
         </span>
-        <h2 className="np-card__title">{songTitle}</h2>
-        <p className="np-card__artist">{songArtist}</p>
+        <h2 className="play-title">{songTitle}</h2>
+        <p className="play-artist">{songArtist}</p>
         <a
           href={link}
-          className="np-card__link"
+          className="spotify-link"
           target="_blank"
           rel="noopener noreferrer"
         >

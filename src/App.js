@@ -16,7 +16,7 @@ function Footer() {
     <footer className="site-footer">
       <div className="container">
         <p>© {year} Brian Pattison</p>
-        <div className="foot-links">
+        <div className="footer-links">
           <a
             href="https://github.com/pattisonb/"
             target="_blank"
@@ -41,14 +41,13 @@ function Footer() {
 function App() {
   return (
     <Router>
-      <div className="app-shell">
+      <div className="app">
         <Navbar />
         <main className="page">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/spotify" element={<Spotify />} />
-            {/* Short-lived URL, in case anyone bookmarked it */}
             <Route
               path="/projects/music"
               element={<Navigate to="/projects/spotify" replace />}

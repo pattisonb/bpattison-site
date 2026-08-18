@@ -1,21 +1,52 @@
 import "./App.css";
-import Sidebar from "./components/Sidebar";
+import Navbar from "./components/Navbar";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import { Projects } from "./pages/Projects";
 import Spotify from "./pages/Spotify";
-import Battlegrounds from "./pages/Battlegrounds";
+
+function Footer() {
+  const year = new Date().getFullYear();
+  return (
+    <footer className="site-footer">
+      <div className="container">
+        <p>© {year} Brian Pattison</p>
+        <div className="foot-links">
+          <a
+            href="https://github.com/pattisonb/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://www.linkedin.com/in/brian-pattison/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            LinkedIn
+          </a>
+          <a href="mailto:brian@glendaleanalytics.com">Email</a>
+        </div>
+      </div>
+    </footer>
+  );
+}
 
 function App() {
   return (
     <Router>
-      <Sidebar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/projects/spotify" element={<Spotify />} />
-        <Route path="/projects/battlegrounds" element={<Battlegrounds />} />
-      </Routes>
+      <div className="app-shell">
+        <Navbar />
+        <main className="page">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/spotify" element={<Spotify />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
     </Router>
   );
 }

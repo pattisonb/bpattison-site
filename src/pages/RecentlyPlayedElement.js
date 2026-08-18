@@ -2,7 +2,7 @@ import React from "react";
 import "../styles/recentlyPlayed.css";
 
 const RecentlyPlayedElement = ({ track }) => {
-  const { album, artists, external_urls, name } = track;
+  const { album, artists, name } = track;
   const albumImage = album.images[0]?.url || "fallback-image-url";
 
   return (

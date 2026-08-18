@@ -1,0 +1,64 @@
+.pcard {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-height: 220px;
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.2s ease;
+}
+
+.pcard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+.pcard__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.pcard__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+}
+
+.pcard__title {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.pcard__blurb {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  flex: 1 0 auto;
+}
+
+.pcard__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.pcard:hover .pcard__cta {
+  gap: 12px;
+}
+
+.pcard__cta svg {
+  transition: transform 0.2s ease;
+  font-size: 0.85rem;
+}

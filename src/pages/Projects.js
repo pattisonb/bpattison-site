@@ -1,33 +1,32 @@
 import React from "react";
+import ProjectCard from "../components/ProjectCard";
+import { projects } from "../data/projects";
+import "../styles/Projects.css";
 
 export const Projects = () => {
   return (
-    <div className="projects">
-      <h1>projects</h1>
-    </div>
-  );
-};
+    <div className="projects-page">
+      <section className="projects-hero">
+        <div className="container">
+          <span className="eyebrow">Projects</span>
+          <h1 className="projects-hero__title">Things I've built</h1>
+          <p className="projects-hero__sub">
+            Side projects, data toys, and experiments. A few pull live data and
+            run right here on the site; others live in their own homes on the
+            web. Poke around.
+          </p>
+        </div>
+      </section>
 
-export const ProjectsOne = () => {
-  return (
-    <div className="projects">
-      <h1>projects/projects1</h1>
-    </div>
-  );
-};
-
-export const ProjectsTwo = () => {
-  return (
-    <div className="projects">
-      <h1>projects/projects2</h1>
-    </div>
-  );
-};
-
-export const ProjectsThree = () => {
-  return (
-    <div className="projects">
-      <h1>projects/projects3</h1>
+      <section className="section projects-list">
+        <div className="container">
+          <div className="projects-grid">
+            {projects.map((project) => (
+              <ProjectCard key={project.title} project={project} />
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

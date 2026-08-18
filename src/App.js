@@ -1,6 +1,11 @@
 import "./App.css";
 import Navbar from "./components/Navbar";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import Home from "./pages/Home";
 import { Projects } from "./pages/Projects";
 import Spotify from "./pages/Spotify";
@@ -43,6 +48,11 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/spotify" element={<Spotify />} />
+            {/* Short-lived URL, in case anyone bookmarked it */}
+            <Route
+              path="/projects/music"
+              element={<Navigate to="/projects/spotify" replace />}
+            />
           </Routes>
         </main>
         <Footer />

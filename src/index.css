@@ -4,6 +4,8 @@
    Design tokens — clean, modern, light
    ============================================================ */
 :root {
+  color-scheme: light;
+
   /* Brand */
   --brand: #4f46e5;          /* indigo */
   --brand-600: #4338ca;
@@ -26,6 +28,9 @@
   --spotify: #1db954;
   --gold: #f59e0b;
 
+  /* Navbar backdrop */
+  --nav-bg: rgba(255, 255, 255, 0.8);
+
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-md: 0 6px 20px -6px rgba(15, 23, 42, 0.12);
@@ -40,6 +45,37 @@
 
   --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* ============================================================
+   Dark theme — toggled via data-theme on <html>
+   ============================================================ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --brand: #818cf8;
+  --brand-600: #6366f1;
+  --brand-700: #c7d2fe;
+  --brand-soft: rgba(99, 102, 241, 0.18);
+  --violet: #a78bfa;
+
+  --bg: #0b1120;
+  --bg-alt: #0f172a;
+  --surface: #131c31;
+  --border: #1e293b;
+  --border-strong: #334155;
+
+  --text: #e2e8f0;
+  --text-soft: #94a3b8;
+  --text-muted: #64748b;
+
+  --spotify: #1ed760;
+
+  --nav-bg: rgba(11, 17, 32, 0.78);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 45px -20px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -142,7 +178,7 @@ code {
 }
 
 .btn-ghost {
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   border-color: var(--border-strong);
 }

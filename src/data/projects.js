@@ -46,6 +46,6 @@ export const projects = [
     internal: false,
     tag: "Open source",
     icon: FaGithub,
-    accent: "#0f172a",
+    accent: "#64748b",
   },
 ];

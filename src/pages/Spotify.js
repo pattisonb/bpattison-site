@@ -51,6 +51,7 @@ function TimeDropdown({ selected, onSelect, open, setOpen }) {
 
 function Spotify() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [nowPlaying, setNowPlaying] = useState({});
   const [recentlyPlayed, setRecentlyPlayed] = useState([]);
   const [topTracks, setTopTracks] = useState([]);
@@ -84,19 +85,45 @@ function Spotify() {
         process.env.REACT_APP_SPOTIFY_CLIENT_SECRET,
         process.env.REACT_APP_SPOTIFY_REFRESH_TOKEN
       ),
-    ]).then((results) => {
-      const [
-        nowPlayingItem,
-        recentlyPlayedItems,
-        topTrackItemsShort,
-        topArtistItemsShort,
-      ] = results;
-      setNowPlaying(nowPlayingItem);
-      setRecentlyPlayed(recentlyPlayedItems.items);
-      setTopTracks(topTrackItemsShort.items);
-      setTopArtists(topArtistItemsShort.items);
-      setLoading(false);
-    });
+    ])
+      .then((results) => {
+        const [
+          nowPlayingItem,
+          recentlyPlayedItems,
+          topTrackItemsShort,
+          topArtistItemsShort,
+        ] = results;
+
+        // Any of these can come back undefined / error-shaped when the
+        // Spotify token refresh or an API call fails — don't crash, just
+        // show what we have and surface a message if we have nothing.
+        const recentItems = recentlyPlayedItems?.items || [];
+        const trackItems = topTrackItemsShort?.items || [];
+        const artistItems = topArtistItemsShort?.items || [];
+
+        setNowPlaying(nowPlayingItem || {});
+        setRecentlyPlayed(recentItems);
+        setTopTracks(trackItems);
+        setTopArtists(artistItems);
+
+        if (!recentItems.length && !trackItems.length && !artistItems.length) {
+          console.error(
+            "Spotify API returned no data. Raw responses:",
+            { recentlyPlayedItems, topTrackItemsShort, topArtistItemsShort }
+          );
+          setError(
+            "Couldn't load listening data from Spotify. The connection may need to be re-authorized — check the browser console for the exact API error."
+          );
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error loading Spotify data:", err);
+        setError(
+          "Couldn't reach Spotify right now. Check the browser console for details."
+        );
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -132,10 +159,12 @@ function Spotify() {
           );
           break;
       }
-      setTopTracks(tracks.items);
+      setTopTracks(tracks?.items || []);
     };
 
-    fetchTop();
+    fetchTop().catch((err) =>
+      console.error("Error loading top tracks:", err)
+    );
   }, [selectedTrackOption]);
 
   useEffect(() => {
@@ -171,10 +200,12 @@ function Spotify() {
           );
           break;
       }
-      setTopArtists(artists.items);
+      setTopArtists(artists?.items || []);
     };
 
-    fetchTop();
+    fetchTop().catch((err) =>
+      console.error("Error loading top artists:", err)
+    );
   }, [selectedArtistOption]);
 
   const getRecentlyPlayedTracks = () => {
@@ -200,35 +231,45 @@ function Spotify() {
       <section className="spotify-hero">
         <div className="container">
           <span className="eyebrow spotify-eyebrow">
-            <FaSpotify /> Now spinning
+            <FaSpotify /> Spotify
           </span>
-          <h1 className="spotify-hero__title">My music, in real time</h1>
+          <h1 className="spotify-hero__title">What I'm listening to</h1>
           <p className="spotify-hero__sub">
-            Pulled live from my Spotify — what's playing right now, what I've had
-            on repeat, and the artists I keep coming back to.
+            Pulled live from my Spotify: what's playing right now, recent plays,
+            and my most-played tracks and artists.
           </p>
         </div>
       </section>
 
       <div className="container">
-        {loading ? (
+        {loading && (
           <div className="spotify-loading">
             <div className="spotify-spinner" />
-            <p>Loading my listening data…</p>
+            <p>Loading listening data…</p>
           </div>
-        ) : (
+        )}
+
+        {!loading && error && (
+          <div className="spotify-loading">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && (
           <>
-            <Player
-              albumImageUrl={nowPlaying.albumImageUrl}
-              artist={nowPlaying.artist}
-              isPlaying={nowPlaying.isPlaying}
-              songUrl={nowPlaying.songUrl}
-              title={nowPlaying.title}
-              lastAlbumImageUrl={recentlyPlayed[0].track.album.images[0].url}
-              lastArtist={recentlyPlayed[0].track.artists[0].name}
-              lastSongUrl={recentlyPlayed[0].track.external_urls.spotify}
-              lastTitle={recentlyPlayed[0].track.name}
-            />
+            {recentlyPlayed.length > 0 && (
+              <Player
+                albumImageUrl={nowPlaying.albumImageUrl}
+                artist={nowPlaying.artist}
+                isPlaying={nowPlaying.isPlaying}
+                songUrl={nowPlaying.songUrl}
+                title={nowPlaying.title}
+                lastAlbumImageUrl={recentlyPlayed[0].track.album.images[0].url}
+                lastArtist={recentlyPlayed[0].track.artists[0].name}
+                lastSongUrl={recentlyPlayed[0].track.external_urls.spotify}
+                lastTitle={recentlyPlayed[0].track.name}
+              />
+            )}
 
             <div className="tracks-container">
               <section className="tracks-panel">

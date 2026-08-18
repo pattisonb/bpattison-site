@@ -14,6 +14,7 @@ const navLinks = [
   { label: "Home", to: "/" },
   { label: "Projects", to: "/projects" },
   { label: "Music", to: "/projects/spotify" },
+  { label: "Tic Tac Toe", to: "/projects/tictactoe" },
 ];
 
 const getInitialTheme = () => {

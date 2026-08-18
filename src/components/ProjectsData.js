@@ -3,6 +3,7 @@ import {
   FaGithub,
   FaVoteYea,
   FaLayerGroup,
+  FaHashtag,
 } from "react-icons/fa";
 
 export const ProjectsData = [
@@ -15,6 +16,16 @@ export const ProjectsData = [
     tag: "Live data",
     icon: FaSpotify,
     accent: "#1db954",
+  },
+  {
+    title: "Tic Tac Toe",
+    blurb:
+      "Play against the minimax algorithm I wrote in C++, ported to run in the browser. It searches the whole game tree, so it doesn't lose.",
+    href: "/projects/tictactoe",
+    internal: true,
+    tag: "Game",
+    icon: FaHashtag,
+    accent: "#f59e0b",
   },
   {
     title: "Spotify Voting",

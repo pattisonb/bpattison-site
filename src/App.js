@@ -9,6 +9,7 @@ import {
 import Home from "./pages/Home";
 import { Projects } from "./pages/Projects";
 import Spotify from "./pages/Spotify";
+import TicTacToe from "./pages/TicTacToe";
 
 function Footer() {
   const year = new Date().getFullYear();
@@ -48,6 +49,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/spotify" element={<Spotify />} />
+            <Route path="/projects/tictactoe" element={<TicTacToe />} />
             <Route
               path="/projects/music"
               element={<Navigate to="/projects/spotify" replace />}

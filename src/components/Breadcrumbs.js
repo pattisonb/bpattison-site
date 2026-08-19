@@ -5,6 +5,7 @@ import "../styles/Breadcrumbs.css";
 const labels = {
   projects: "projects",
   spotify: "music",
+  votify: "votify",
   tictactoe: "tic tac toe",
 };
 

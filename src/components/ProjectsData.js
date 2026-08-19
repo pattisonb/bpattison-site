@@ -28,11 +28,11 @@ export const ProjectsData = [
     accent: "#f59e0b",
   },
   {
-    title: "Spotify Voting",
+    title: "Votify",
     blurb:
-      "A small app for picking what plays next. Friends vote on tracks and the queue reorders as they do.",
-    href: "https://spotifyvote.web.app/",
-    internal: false,
+      "Vote on what plays next. Everyone joins a session, nominates tracks, and the winners drop into the host's Spotify queue.",
+    href: "/projects/votify",
+    internal: true,
     tag: "Web app",
     icon: FaVoteYea,
     accent: "#4f46e5",

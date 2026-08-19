@@ -13,7 +13,10 @@ import {
   doc,
   setDoc,
   getDoc,
+  updateDoc,
   deleteDoc,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import { votifyDb } from "../utils/votifyFirebase";
 import {
@@ -30,7 +33,10 @@ import {
 } from "../utils/votifyAuth";
 import "../styles/Votify.css";
 
-const NOMINATION_SECONDS = 300; // a nomination is open for 5 minutes
+// how long a zero-vote song survives on thin ice (each downvote cuts a minute)
+const PURGATORY_SECONDS = 300;
+// how close to the end of the current song we hand the next one to Spotify
+const DISPATCH_WINDOW_MS = 15000;
 
 const LS = {
   token: "votify_token",
@@ -62,6 +68,48 @@ const clearLS = (key) => {
 
 const randomGuest = () => `Guest ${Math.floor(1000 + Math.random() * 9000)}`;
 
+// a persistent anonymous id per browser, deliberately NOT cleared on leave or
+// logout — votes are keyed to it, so rejoining under a new name can't double-vote
+const VOTER_KEY = "votify_voter";
+const getVoterId = () => {
+  let id = readLS(VOTER_KEY);
+  if (!id) {
+    id = `voter_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    writeLS(VOTER_KEY, id);
+  }
+  return id;
+};
+
+const trackScore = (t) =>
+  (t.upvotes?.length || 0) - (t.downvotes?.length || 0);
+
+const purgatoryStart = (t) => {
+  const p = t.purgatoryAt;
+  if (!p) return null;
+  return typeof p.toDate === "function" ? p.toDate() : new Date(p);
+};
+
+const purgatoryRemaining = (t) => {
+  const start = purgatoryStart(t);
+  if (!start) return PURGATORY_SECONDS;
+  const penalty = (t.penalizedBy || []).length * 60;
+  return Math.max(
+    0,
+    PURGATORY_SECONDS - penalty - Math.floor((Date.now() - start.getTime()) / 1000)
+  );
+};
+
+const orderTracks = (list, mode) => {
+  const ts = (t) => t.timestamp?.seconds || 0;
+  const sorted = [...list];
+  if (mode === "votes") {
+    sorted.sort((a, b) => trackScore(b) - trackScore(a) || ts(a) - ts(b));
+  } else {
+    sorted.sort((a, b) => ts(a) - ts(b));
+  }
+  return sorted;
+};
+
 function Artists({ artists }) {
   return (
     <>
@@ -76,8 +124,25 @@ function Artists({ artists }) {
   );
 }
 
-function NowPlaying({ track }) {
+function NowPlaying({ track, endsAt }) {
   const albumImage = track.album?.images?.[0]?.url;
+
+  const [secondsLeft, setSecondsLeft] = useState(null);
+  useEffect(() => {
+    if (!endsAt) {
+      setSecondsLeft(null);
+      return undefined;
+    }
+    const compute = () =>
+      setSecondsLeft(Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+    compute();
+    const interval = setInterval(compute, 1000);
+    return () => clearInterval(interval);
+  }, [endsAt]);
+
+  const minutes = Math.floor((secondsLeft || 0) / 60);
+  const seconds = (secondsLeft || 0) % 60;
+
   return (
     <div className="votify-now-playing">
       {albumImage && (
@@ -89,6 +154,12 @@ function NowPlaying({ track }) {
         <p className="votify-np-artist">
           <Artists artists={track.artists || []} />
         </p>
+        {secondsLeft !== null && (
+          <span className="votify-np-timer">
+            about {minutes}:{seconds < 10 ? "0" : ""}
+            {seconds} left, then the top song locks in
+          </span>
+        )}
       </div>
     </div>
   );
@@ -119,97 +190,51 @@ function SearchResult({ track, onNominate, nominated }) {
   );
 }
 
-function NominatedTrack({ track, user, sessionID, isLeader, queueToken }) {
-  const {
-    album,
-    artists = [],
-    name,
-    id,
-    nominatedBy,
-    upvotes = [],
-    downvotes = [],
-    timestamp,
-  } = track;
-  const albumImage = album?.images?.[0]?.url;
+function SessionTrack({ track, position, voter, onVote, purgatory }) {
+  const score = trackScore(track);
+  const canVote = voter !== (track.nominatedById || track.nominatedBy);
+  const votedUp = (track.upvotes || []).includes(voter);
+  const votedDown = (track.downvotes || []).includes(voter);
+  const albumImage = track.album?.images?.[0]?.url;
 
-  const canVote = user !== nominatedBy;
-  const votedUp = upvotes.includes(user);
-  const votedDown = downvotes.includes(user);
-
-  const castVote = (up) => {
-    if (!canVote) return;
-    const nextUp = up
-      ? [...upvotes.filter((u) => u !== user), user]
-      : upvotes.filter((u) => u !== user);
-    const nextDown = up
-      ? downvotes.filter((u) => u !== user)
-      : [...downvotes.filter((u) => u !== user), user];
-    setDoc(doc(votifyDb, `${sessionID}:tracks`, id), {
-      trackID: id,
-      nominatedBy,
-      upvotes: nextUp,
-      downvotes: nextDown,
-      timestamp,
-    }).catch((e) => console.error("Vote failed:", e));
-  };
-
-  const [remaining, setRemaining] = useState(NOMINATION_SECONDS);
+  const [remaining, setRemaining] = useState(
+    purgatory ? purgatoryRemaining(track) : 0
+  );
   useEffect(() => {
-    if (!timestamp || typeof timestamp.toDate !== "function") return undefined;
-    const startMs = timestamp.toDate().getTime();
-    const compute = () =>
-      Math.max(
-        0,
-        NOMINATION_SECONDS - Math.floor((Date.now() - startMs) / 1000)
-      );
-    setRemaining(compute());
-    const interval = setInterval(() => {
-      const r = compute();
-      setRemaining(r);
-      if (r <= 0) {
-        clearInterval(interval);
-        deleteDoc(doc(votifyDb, `${sessionID}:tracks`, id))
-          .then(() => {
-            if (isLeader && queueToken && upvotes.length > downvotes.length) {
-              return addTrackToQueue(queueToken, id);
-            }
-            return undefined;
-          })
-          .catch((e) => console.error("Expiry handling failed:", e));
-      }
-    }, 1000);
+    if (!purgatory) return undefined;
+    setRemaining(purgatoryRemaining(track));
+    const interval = setInterval(
+      () => setRemaining(purgatoryRemaining(track)),
+      1000
+    );
     return () => clearInterval(interval);
-  }, [
-    timestamp,
-    id,
-    sessionID,
-    isLeader,
-    queueToken,
-    upvotes.length,
-    downvotes.length,
-  ]);
+  }, [purgatory, track]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
   const formatted = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
-  const score = upvotes.length - downvotes.length;
 
   return (
     <div className="votify-nom">
+      {position != null && <span className="votify-pos">{position}</span>}
       {albumImage && (
-        <img src={albumImage} alt={name} className="votify-nom-art" />
+        <img src={albumImage} alt={track.name} className="votify-nom-art" />
       )}
       <div className="votify-nom-info">
-        <p className="votify-nom-title">{name}</p>
+        <p className="votify-nom-title">{track.name}</p>
         <p className="votify-nom-artist">
-          <Artists artists={artists} />
+          <Artists artists={track.artists || []} />
         </p>
-        <span className="votify-nom-timer">{formatted} left</span>
+        {purgatory && (
+          <span className="votify-nom-timer">
+            {formatted} left, a vote up saves it
+          </span>
+        )}
       </div>
       <div className="votify-vote">
         <button
           className={`votify-vote-btn up${votedUp ? " active" : ""}`}
-          onClick={() => castVote(true)}
+          onClick={() => onVote(track, true)}
           disabled={!canVote || votedUp}
           aria-label="Upvote"
         >
@@ -218,7 +243,7 @@ function NominatedTrack({ track, user, sessionID, isLeader, queueToken }) {
         <span className="votify-score">{score > 0 ? `+${score}` : score}</span>
         <button
           className={`votify-vote-btn down${votedDown ? " active" : ""}`}
-          onClick={() => castVote(false)}
+          onClick={() => onVote(track, false)}
           disabled={!canVote || votedDown}
           aria-label="Downvote"
         >
@@ -232,6 +257,7 @@ function NominatedTrack({ track, user, sessionID, isLeader, queueToken }) {
 function Votify() {
   const [token, setToken] = useState(""); // host's own Spotify token
   const [user, setUser] = useState(""); // display name (host) or entered name (guest)
+  const [spotifyId, setSpotifyId] = useState(""); // Spotify account id, used to reclaim a room
   const [role, setRole] = useState(""); // "host" | "guest" | ""
   const [error, setError] = useState(null);
 
@@ -241,6 +267,8 @@ function Votify() {
 
   const [nominatedTracks, setNominatedTracks] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
+  const [endsAt, setEndsAt] = useState(null); // rough ms timestamp the current song ends
+  const [orderMode, setOrderMode] = useState("added"); // "added" | "votes"
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchKey, setSearchKey] = useState("");
@@ -249,13 +277,26 @@ function Votify() {
   const [sessionIdInput, setSessionIdInput] = useState("");
   const [guestName, setGuestName] = useState("");
 
+  const voterId = useRef(getVoterId()).current;
   const lastNowPlayingId = useRef(null);
   const lastPublishedToken = useRef(null);
+  const lastEndsAt = useRef(null);
+  const dispatchedFor = useRef(null);
+  const tracksRef = useRef([]);
+  const orderModeRef = useRef("added");
+  const detailsCache = useRef(new Map());
+
+  useEffect(() => {
+    tracksRef.current = nominatedTracks;
+  }, [nominatedTracks]);
+
+  useEffect(() => {
+    orderModeRef.current = orderMode;
+  }, [orderMode]);
 
   // The token used for read-only Spotify calls (search / track lookup): the
   // host uses their own; guests borrow the host's from the session doc.
   const apiToken = role === "host" ? token : hostToken;
-  const isLeader = role === "host";
 
   const saveTokens = (data) => {
     writeLS(LS.token, data.access_token);
@@ -323,6 +364,7 @@ function Votify() {
         if (!active) return;
         const name = data.display_name || data.id || "Host";
         setUser(name);
+        setSpotifyId(data.id || "");
         if (readLS(LS.role) === "host") {
           const sid = readLS(LS.sessionID);
           if (sid) {
@@ -372,36 +414,50 @@ function Votify() {
     const unsubscribe = onSnapshot(ref, (snapshot) => {
       Promise.all(
         snapshot.docs.map(async (d) => {
-          const details = await getTrack(apiToken, d.id);
           const data = d.data();
+          // track details never change, so look each song up once and keep
+          // it; one failed lookup skips that song instead of freezing the list
+          let details = detailsCache.current.get(d.id);
+          if (!details) {
+            try {
+              details = await getTrack(apiToken, d.id);
+              detailsCache.current.set(d.id, details);
+            } catch (e) {
+              console.error("Track lookup failed:", e);
+              return null;
+            }
+          }
           return {
             ...details,
             upvotes: data.upvotes || [],
             downvotes: data.downvotes || [],
             nominatedBy: data.nominatedBy,
+            nominatedById: data.nominatedById || null,
             timestamp: data.timestamp,
+            purgatoryAt: data.purgatoryAt || null,
+            penalizedBy: data.penalizedBy || [],
           };
         })
-      )
-        .then((tracks) => {
-          tracks.sort(
-            (a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)
-          );
-          setNominatedTracks(tracks);
-        })
-        .catch((e) => console.error("Loading nominations failed:", e));
+      ).then((tracks) => {
+        const loaded = tracks.filter(Boolean);
+        loaded.sort(
+          (a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)
+        );
+        setNominatedTracks(loaded);
+      });
     });
     return () => unsubscribe();
   }, [apiToken, sessionID]);
 
-  // 5. Now-playing sync. The host publishes their playback + a fresh borrow
-  //    token to the session doc; guests read both from it.
+  // 5. The session heartbeat. The host publishes playback, a borrow token, and
+  //    the order mode; hands the next song to Spotify just before the current
+  //    one ends; and enforces the thin ice timers. Guests read everything.
   useEffect(() => {
     if (!sessionID) return undefined;
     if (role === "host" && !token) return undefined;
-    if (role === "guest" && !hostToken && !sessionID) return undefined;
     let cancelled = false;
     const dataRef = doc(votifyDb, `${sessionID}:data`, `${sessionID}`);
+    const trackDoc = (id) => doc(votifyDb, `${sessionID}:tracks`, id);
 
     const tick = async () => {
       try {
@@ -410,6 +466,7 @@ function Votify() {
             lastPublishedToken.current = token;
             await setDoc(dataRef, { hostToken: token }, { merge: true });
           }
+
           const playback = await getNowPlaying(token);
           if (playback && playback.item) {
             if (!cancelled) setNowPlaying(playback.item);
@@ -422,6 +479,83 @@ function Votify() {
               );
             }
           }
+
+          // publish a rough song-end time so everyone can see roughly when
+          // the top of the queue locks in
+          let ends = 0;
+          if (playback && playback.item && playback.is_playing) {
+            ends =
+              Date.now() +
+              ((playback.item.duration_ms || 0) - (playback.progress_ms || 0));
+          }
+          if (!cancelled) setEndsAt(ends || null);
+          if (
+            lastEndsAt.current === null ||
+            Math.abs(ends - lastEndsAt.current) > 3000
+          ) {
+            lastEndsAt.current = ends;
+            await setDoc(dataRef, { endsAt: ends }, { merge: true });
+          }
+
+          const tracks = tracksRef.current;
+          const queued = orderTracks(
+            tracks.filter((t) => trackScore(t) > 0),
+            orderModeRef.current
+          );
+
+          // the host is the referee: stamp songs onto thin ice when they hit
+          // zero, and clear the stamp (and penalties) when they're rescued
+          for (const t of tracks) {
+            const s = trackScore(t);
+            if (s > 0 && (t.purgatoryAt || (t.penalizedBy || []).length)) {
+              await updateDoc(trackDoc(t.id), {
+                purgatoryAt: null,
+                penalizedBy: [],
+              });
+            } else if (s <= 0 && !t.purgatoryAt) {
+              await updateDoc(trackDoc(t.id), { purgatoryAt: new Date() });
+            }
+          }
+
+          // thin ice: when time runs out, negative scores are removed and a
+          // zero only plays if nothing else is queued, otherwise it's trashed
+          for (const t of tracks.filter((t) => trackScore(t) <= 0)) {
+            if (!t.purgatoryAt || purgatoryRemaining(t) > 0) continue;
+            if (trackScore(t) === 0 && queued.length === 0) {
+              try {
+                await addTrackToQueue(token, t.id);
+              } catch (e) {
+                continue; // no active player yet, try again next tick
+              }
+            }
+            await deleteDoc(trackDoc(t.id));
+          }
+
+          // hand the next queued song to Spotify right before this one ends
+          if (
+            playback &&
+            playback.item &&
+            playback.is_playing &&
+            queued.length > 0
+          ) {
+            const left =
+              (playback.item.duration_ms || 0) - (playback.progress_ms || 0);
+            if (
+              left > 0 &&
+              left < DISPATCH_WINDOW_MS &&
+              dispatchedFor.current !== playback.item.id
+            ) {
+              dispatchedFor.current = playback.item.id;
+              const next = queued[0];
+              try {
+                await addTrackToQueue(token, next.id);
+                await deleteDoc(trackDoc(next.id));
+              } catch (e) {
+                dispatchedFor.current = null;
+                console.error("Dispatch failed:", e);
+              }
+            }
+          }
         } else {
           const snap = await getDoc(dataRef);
           const data = snap.data();
@@ -431,9 +565,22 @@ function Votify() {
           }
           const borrow = data.hostToken || hostToken;
           if (data.nowPlaying && borrow && lastNowPlayingId.current !== data.nowPlaying) {
-            lastNowPlayingId.current = data.nowPlaying;
-            const details = await getTrack(borrow, data.nowPlaying);
-            if (!cancelled) setNowPlaying(details);
+            try {
+              const details = await getTrack(borrow, data.nowPlaying);
+              if (!cancelled) {
+                setNowPlaying(details);
+                // only mark it handled once the lookup worked, so a failed
+                // fetch right after a refresh retries on the next tick
+                lastNowPlayingId.current = data.nowPlaying;
+              }
+            } catch (e) {
+              console.error("Now playing lookup failed:", e);
+            }
+          }
+          if (!cancelled) setEndsAt(data.endsAt || null);
+          const mode = data.orderMode || "added";
+          if (!cancelled && mode !== orderModeRef.current) {
+            setOrderMode(mode);
           }
         }
       } catch (e) {
@@ -456,9 +603,13 @@ function Votify() {
     setSessionID("");
     setSessionLeader("");
     setNowPlaying(null);
+    setEndsAt(null);
     setHostToken("");
+    setOrderMode("added");
     lastNowPlayingId.current = null;
     lastPublishedToken.current = null;
+    lastEndsAt.current = null;
+    dispatchedFor.current = null;
     Object.values(LS).forEach(clearLS);
   };
 
@@ -469,13 +620,17 @@ function Votify() {
       await setDoc(doc(votifyDb, `${id}:data`, id), {
         sessionID: id,
         leader: user,
+        leaderId: spotifyId,
         hostToken: token,
+        orderMode: "added",
       });
       setRole("host");
       setSessionID(id);
       setSessionLeader(user);
+      setOrderMode("added");
       lastNowPlayingId.current = null;
       lastPublishedToken.current = token;
+      dispatchedFor.current = null;
       writeLS(LS.role, "host");
       writeLS(LS.sessionID, id);
       writeLS(LS.leader, user);
@@ -497,10 +652,32 @@ function Votify() {
         return;
       }
       const data = snap.data();
+
+      // entering your own room's code takes the host seat back
+      const isMyRoom =
+        token &&
+        (data.leaderId ? data.leaderId === spotifyId : data.leader === user);
+      if (isMyRoom) {
+        setRole("host");
+        setSessionID(id);
+        setSessionLeader(data.leader || user);
+        setOrderMode(data.orderMode || "added");
+        lastNowPlayingId.current = null;
+        lastPublishedToken.current = null; // republish a fresh token next tick
+        dispatchedFor.current = null;
+        writeLS(LS.role, "host");
+        writeLS(LS.sessionID, id);
+        writeLS(LS.leader, data.leader || user);
+        setSessionIdInput("");
+        setError(null);
+        return;
+      }
+
       setRole("guest");
       setSessionID(id);
       setSessionLeader(data.leader || "");
       setHostToken(data.hostToken || "");
+      setOrderMode(data.orderMode || "added");
       setUser(name);
       lastNowPlayingId.current = null;
       writeLS(LS.role, "guest");
@@ -516,17 +693,37 @@ function Votify() {
   };
 
   const handleLeaveSession = () => {
+    if (role === "host") {
+      const sure = window.confirm(
+        `Leave your own session? Voting pauses until you take it back by entering code ${sessionID} under Join.`
+      );
+      if (!sure) return;
+    }
     const wasGuest = role === "guest";
     setSessionID("");
     setSessionLeader("");
     setNowPlaying(null);
+    setEndsAt(null);
     setHostToken("");
+    setOrderMode("added");
     setSearchOpen(false);
     setResults([]);
     setRole("");
     lastNowPlayingId.current = null;
+    lastEndsAt.current = null;
+    dispatchedFor.current = null;
     if (wasGuest) setUser("");
     [LS.role, LS.sessionID, LS.leader, LS.name].forEach(clearLS);
+  };
+
+  const handleOrderMode = (mode) => {
+    if (role !== "host" || mode === orderMode) return;
+    setOrderMode(mode);
+    setDoc(
+      doc(votifyDb, `${sessionID}:data`, `${sessionID}`),
+      { orderMode: mode },
+      { merge: true }
+    ).catch((e) => console.error("Order mode update failed:", e));
   };
 
   const handleSearch = async (e) => {
@@ -540,14 +737,18 @@ function Votify() {
     }
   };
 
+  // nominating counts as your upvote, so a new song goes straight to the queue
   const handleNominate = async (track) => {
     try {
       await setDoc(doc(votifyDb, `${sessionID}:tracks`, track.id), {
         trackID: track.id,
         nominatedBy: user,
-        upvotes: [user],
+        nominatedById: voterId,
+        upvotes: [voterId],
         downvotes: [],
         timestamp: new Date(),
+        purgatoryAt: null,
+        penalizedBy: [],
       });
     } catch (e) {
       console.error("Nominate failed:", e);
@@ -555,7 +756,39 @@ function Votify() {
     }
   };
 
+  // votes are atomic field updates so simultaneous voters can't overwrite
+  // each other; the host's heartbeat handles queue/thin ice transitions
+  const castVote = (track, up) => {
+    if (voterId === (track.nominatedById || track.nominatedBy)) return;
+    const update = up
+      ? { upvotes: arrayUnion(voterId), downvotes: arrayRemove(voterId) }
+      : { upvotes: arrayRemove(voterId), downvotes: arrayUnion(voterId) };
+    // a downvote on thin ice costs the song a minute; arrayUnion means one
+    // person can never stack penalties
+    if (!up && track.purgatoryAt) {
+      update.penalizedBy = arrayUnion(voterId);
+    }
+    // an upvote that rescues the song clears its stamp right away
+    if (up && track.purgatoryAt) {
+      const ups =
+        (track.upvotes || []).filter((u) => u !== voterId).length + 1;
+      const downs = (track.downvotes || []).filter((u) => u !== voterId).length;
+      if (ups - downs > 0) {
+        update.purgatoryAt = null;
+        update.penalizedBy = [];
+      }
+    }
+    updateDoc(doc(votifyDb, `${sessionID}:tracks`, track.id), update).catch(
+      (e) => console.error("Vote failed:", e)
+    );
+  };
+
   const nominatedIds = nominatedTracks.map((t) => t.id);
+  const queuedTracks = orderTracks(
+    nominatedTracks.filter((t) => trackScore(t) > 0),
+    orderMode
+  );
+  const thinIceTracks = nominatedTracks.filter((t) => trackScore(t) <= 0);
 
   return (
     <div className="votify-page">
@@ -605,7 +838,10 @@ function Votify() {
 
             <div className="votify-card">
               <h2>Join a session</h2>
-              <p>Enter a code to nominate and vote — no login needed.</p>
+              <p>
+                Enter a code to nominate and vote — no login needed.
+                {token && " Enter your own room's code to take it back as host."}
+              </p>
               <div className="votify-join-fields">
                 <input
                   className="votify-input"
@@ -667,10 +903,25 @@ function Votify() {
               </div>
             </div>
 
-            {nowPlaying && nowPlaying.album && <NowPlaying track={nowPlaying} />}
+            {nowPlaying && nowPlaying.album && (
+              <NowPlaying track={nowPlaying} endsAt={endsAt} />
+            )}
 
             {searchOpen && (
               <div className="votify-card votify-search">
+                <button
+                  type="button"
+                  className="votify-dismiss"
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setResults([]);
+                    setSearchKey("");
+                  }}
+                  aria-label="Close search"
+                  title="Close search"
+                >
+                  <FaTimes />
+                </button>
                 <form className="votify-search-form" onSubmit={handleSearch}>
                   <input
                     className="votify-input"
@@ -705,32 +956,87 @@ function Votify() {
             <div className="votify-noms">
               <div className="tracks-header">
                 <h2>Up next</h2>
-                <span className="votify-count">
-                  {nominatedTracks.length} nominated
-                </span>
+                <div className="votify-order">
+                  <span>Order</span>
+                  <button
+                    className={
+                      "votify-order-btn" +
+                      (orderMode === "added" ? " active" : "")
+                    }
+                    onClick={() => handleOrderMode("added")}
+                    disabled={role !== "host"}
+                    title={role !== "host" ? "The host picks the order" : ""}
+                  >
+                    First come
+                  </button>
+                  <button
+                    className={
+                      "votify-order-btn" +
+                      (orderMode === "votes" ? " active" : "")
+                    }
+                    onClick={() => handleOrderMode("votes")}
+                    disabled={role !== "host"}
+                    title={role !== "host" ? "The host picks the order" : ""}
+                  >
+                    Most votes
+                  </button>
+                </div>
               </div>
-              {nominatedTracks.length === 0 ? (
+              {queuedTracks.length === 0 ? (
                 <p className="votify-empty">
-                  No nominations yet. Hit “Search &amp; nominate” to add the
-                  first track.
+                  Nothing queued. Hit “Search &amp; nominate” to add the first
+                  track.
                 </p>
               ) : (
                 <div className="votify-noms-list">
-                  {nominatedTracks.map((track) => (
-                    <NominatedTrack
+                  {queuedTracks.map((track, i) => (
+                    <SessionTrack
                       key={track.id}
                       track={track}
-                      user={user}
-                      sessionID={sessionID}
-                      isLeader={isLeader}
-                      queueToken={token}
+                      position={i + 1}
+                      voter={voterId}
+                      onVote={castVote}
                     />
                   ))}
                 </div>
               )}
             </div>
+
+            {thinIceTracks.length > 0 && (
+              <div className="votify-ice">
+                <div className="tracks-header">
+                  <h2>On thin ice</h2>
+                  <span className="votify-count">
+                    out of votes, running out of time
+                  </span>
+                </div>
+                <div className="votify-noms-list">
+                  {thinIceTracks.map((track) => (
+                    <SessionTrack
+                      key={track.id}
+                      track={track}
+                      voter={voterId}
+                      onVote={castVote}
+                      purgatory
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
+
+        <p className="votify-footnote">
+          Votify started as its own app back in 2024.{" "}
+          <a
+            href="https://github.com/pattisonb/votify"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Check out the original code
+          </a>{" "}
+          if you want to see where it came from.
+        </p>
       </div>
     </div>
   );

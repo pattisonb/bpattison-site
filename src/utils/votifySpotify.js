@@ -37,6 +37,15 @@ export async function getNowPlaying(token) {
   return res.data;
 }
 
+// Upcoming tracks in the player's queue (empty when nothing is queued).
+export async function getQueue(token) {
+  const res = await axios.get(`${BASE}/me/player/queue`, {
+    headers: authHeader(token),
+    validateStatus: (s) => s === 200 || s === 204,
+  });
+  return res.data?.queue || [];
+}
+
 export async function addTrackToQueue(token, trackId) {
   await axios.post(`${BASE}/me/player/queue`, null, {
     headers: authHeader(token),

@@ -231,9 +231,109 @@
   font-size: 0.95rem;
 }
 
+.votify-np-timer {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Queue position + order toggle */
+.votify-pos {
+  width: 24px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.votify-order {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.votify-order-btn {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.votify-order-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.votify-order-btn.active {
+  border-color: var(--brand);
+  color: var(--brand-700);
+  background: var(--brand-soft);
+}
+
+.votify-order-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Thin ice */
+.votify-ice {
+  margin-top: 40px;
+}
+
+.votify-ice .votify-nom {
+  border-style: dashed;
+}
+
+/* Footnote */
+.votify-footnote {
+  margin-top: 64px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 /* Search */
 .votify-search {
+  position: relative;
   margin-bottom: 28px;
+}
+
+.votify-dismiss {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.votify-dismiss:hover {
+  color: var(--text);
+  background: var(--bg-alt);
+}
+
+.votify-search .votify-search-form {
+  margin-right: 36px;
 }
 
 .votify-search-form {

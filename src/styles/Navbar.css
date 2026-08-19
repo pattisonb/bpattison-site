@@ -130,6 +130,11 @@
   transform: translateY(-1px);
 }
 
+.theme-toggle.on {
+  color: var(--brand-700);
+  background: var(--brand-soft);
+}
+
 .menu-toggle {
   display: none;
   background: none;

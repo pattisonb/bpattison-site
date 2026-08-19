@@ -1,5 +1,6 @@
 import "./App.css";
 import Navbar from "./components/Navbar";
+import Breadcrumbs from "./components/Breadcrumbs";
 import {
   BrowserRouter as Router,
   Routes,
@@ -45,6 +46,7 @@ function App() {
       <div className="app">
         <Navbar />
         <main className="page">
+          <Breadcrumbs />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />

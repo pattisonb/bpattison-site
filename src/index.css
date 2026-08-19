@@ -67,6 +67,125 @@
   --shadow-lg: 0 20px 45px -20px rgba(0, 0, 0, 0.65);
 }
 
+/* Craigslist Mode */
+[data-style="craigslist"] {
+  color-scheme: light;
+
+  --brand: #0000ee;
+  --brand-600: #0000cc;
+  --brand-700: #551a8b;
+  --brand-soft: #ececfc;
+  --violet: #551a8b;
+
+  --bg: #ffffff;
+  --bg-alt: #ececec;
+  --surface: #ffffff;
+  --border: #cccccc;
+  --border-strong: #999999;
+
+  --text: #000000;
+  --text-soft: #333333;
+  --text-muted: #666666;
+
+  --spotify: #0000ee;
+  --gold: #551a8b;
+
+  --nav-bg: #ffffff;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+
+  --radius-sm: 0px;
+  --radius: 0px;
+  --radius-lg: 0px;
+
+  --font-display: 'Times New Roman', Times, serif;
+  --font-body: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] * {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-style="craigslist"] body {
+  font-size: 15px;
+}
+
+[data-style="craigslist"] a {
+  text-decoration: underline;
+}
+
+[data-style="craigslist"] h1,
+[data-style="craigslist"] h2,
+[data-style="craigslist"] h3 {
+  letter-spacing: 0;
+}
+
+[data-style="craigslist"] .hero-title,
+[data-style="craigslist"] .projects-hero h1,
+[data-style="craigslist"] .spotify-hero h1,
+[data-style="craigslist"] .tictactoe-hero h1 {
+  font-size: 1.7rem;
+}
+
+[data-style="craigslist"] .section-title {
+  font-size: 1.4rem;
+}
+
+[data-style="craigslist"] .hero,
+[data-style="craigslist"] .projects-hero,
+[data-style="craigslist"] .spotify-hero,
+[data-style="craigslist"] .tictactoe-hero {
+  background: var(--bg);
+  padding-top: 28px;
+  padding-bottom: 20px;
+}
+
+[data-style="craigslist"] .hero-glow {
+  display: none;
+}
+
+[data-style="craigslist"] .section {
+  padding: 32px 0;
+}
+
+[data-style="craigslist"] .nav-logo {
+  background: #551a8b;
+}
+
+[data-style="craigslist"] .nav-name {
+  text-transform: lowercase;
+  color: #551a8b;
+  font-weight: 700;
+}
+
+[data-style="craigslist"] .nav-link,
+[data-style="craigslist"] .nav-socials a {
+  text-decoration: none;
+}
+
+[data-style="craigslist"] .btn {
+  background: #ececec;
+  color: #000;
+  border: 1px solid #999;
+  font-weight: 400;
+  padding: 6px 14px;
+}
+
+[data-style="craigslist"] .btn:hover,
+[data-style="craigslist"] .project-card:hover,
+[data-style="craigslist"] .cell:hover:not(:disabled),
+[data-style="craigslist"] .tree-node:hover,
+[data-style="craigslist"] .hero-links a:hover,
+[data-style="craigslist"] .nav-socials a:hover,
+[data-style="craigslist"] .theme-toggle:hover,
+[data-style="craigslist"] .recently-played-element:hover,
+[data-style="craigslist"] .top-artist-element:hover {
+  transform: none;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -184,8 +303,81 @@ code {
   color: var(--brand-700);
 }
 
+/* fake craigslist listing chrome, only rendered in craigslist mode */
+.listing {
+  max-width: 980px;
+  margin: 0 auto 56px;
+  font-family: 'Times New Roman', Times, serif;
+  color: #000;
+}
+
+.listing-nav {
+  text-align: center;
+  color: #0000ee;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.listing-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 18px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.92rem;
+  color: #666;
+}
+
+.listing-reply {
+  background: #ece0f8;
+  border: 1px solid #b39ddb;
+  color: #551a8b;
+  padding: 6px 20px;
+  text-decoration: none;
+  font-size: 1rem;
+}
+
+.listing-reply:hover {
+  background: #e0cef4;
+}
+
+.listing-actions {
+  display: flex;
+  gap: 18px;
+}
+
+.listing-print {
+  margin-left: auto;
+  color: #0000ee;
+}
+
+.listing-title {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #000;
+}
+
+.listing-image {
+  width: 300px;
+  border: 1px solid #ccc;
+}
+
+.listing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  margin-top: 44px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.86rem;
+  color: #333;
+}
+
 /* Mobile Responsive */
 @media (max-width: 640px) {
   .section { padding: 52px 0; }
   .container { padding: 0 18px; }
+  .listing-image { width: 100%; max-width: 300px; }
 }

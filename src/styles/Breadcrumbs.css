@@ -1,0 +1,17 @@
+.breadcrumbs {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.92rem;
+  padding: 10px 0;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
+  color: #333;
+}
+
+.breadcrumbs a {
+  color: #0000ee;
+}
+
+.breadcrumb-sep {
+  color: #666;
+  padding: 0 3px;
+}

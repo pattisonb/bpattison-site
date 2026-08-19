@@ -59,6 +59,9 @@ function MiniBoard({ board, highlight }) {
 }
 
 function TicTacToe() {
+  const [craigslist, setCraigslist] = useState(
+    document.documentElement.getAttribute("data-style") === "craigslist"
+  );
   const [gridSize, setGridSize] = useState(3);
   const [board, setBoard] = useState(makeBoard(3));
   const [status, setStatus] = useState("Your turn");
@@ -72,6 +75,20 @@ function TicTacToe() {
   useEffect(() => {
     setTreePath([]);
   }, [board]);
+
+  //rerender when the craigslist toggle in the navbar flips
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setCraigslist(
+        document.documentElement.getAttribute("data-style") === "craigslist"
+      );
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-style"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const startGame = (size) => {
     setGridSize(size);
@@ -241,7 +258,39 @@ function TicTacToe() {
         </div>
       </section>
 
-      <div className="container game-area">
+      <div
+        className={"container game-area" + (craigslist ? " as-listing" : "")}
+      >
+        {craigslist && (
+          <>
+            <div className="listing-nav">◀ prev &nbsp; ▲ &nbsp; next ▶</div>
+            <div className="listing-bar">
+              <a
+                className="listing-reply"
+                href="https://github.com/pattisonb/PA04-Minimax"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                reply
+              </a>
+              <span className="listing-actions">
+                <span>favorite</span>
+                <span>hide</span>
+                <span>flag</span>
+                <span>share</span>
+              </span>
+              <span>
+                Posted <u>just now</u>
+              </span>
+              <span className="listing-print">print</span>
+            </div>
+            <h2 className="listing-title">
+              Tic tac toe vs my minimax algorithm - it doesn't lose ({gridSize}
+              x{gridSize})
+            </h2>
+          </>
+        )}
+
         <div className="size-picker">
           <span>What size grid would you like?</span>
           {[3, 4, 5].map((size) => (
@@ -313,6 +362,18 @@ function TicTacToe() {
             {lastMove.empty} open squares is too many to search, so the
             computer just took one. It starts searching at{" "}
             {alphaBeta ? searchLimitPruned : searchLimitPlain} or fewer.
+          </div>
+        )}
+
+        {craigslist && (
+          <div className="listing-footer">
+            <span>post id: 79538{gridSize}2285</span>
+            <span>
+              posted: <u>just now</u>
+            </span>
+            <span>
+              ♡ <u>best of</u> <sup>[?]</sup>
+            </span>
           </div>
         )}
       </div>

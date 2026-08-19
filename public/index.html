@@ -39,6 +39,10 @@
               : "light";
           }
           document.documentElement.setAttribute("data-theme", theme);
+          var style = localStorage.getItem("style");
+          if (style) {
+            document.documentElement.setAttribute("data-style", style);
+          }
         } catch (e) {}
       })();
     </script>

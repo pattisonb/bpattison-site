@@ -7,6 +7,7 @@ import {
   FaTimes,
   FaMoon,
   FaSun,
+  FaPeace,
 } from "react-icons/fa";
 import "../styles/Navbar.css";
 
@@ -29,10 +30,19 @@ const getInitialTheme = () => {
     : "light";
 };
 
+const getInitialStyle = () => {
+  try {
+    return localStorage.getItem("style") || "";
+  } catch (e) {
+    return "";
+  }
+};
+
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [theme, setTheme] = useState(getInitialTheme);
+  const [pageStyle, setPageStyle] = useState(getInitialStyle);
   const location = useLocation();
 
   useEffect(() => {
@@ -42,8 +52,22 @@ const Navbar = () => {
     } catch (e) {}
   }, [theme]);
 
+  useEffect(() => {
+    if (pageStyle) {
+      document.documentElement.setAttribute("data-style", pageStyle);
+    } else {
+      document.documentElement.removeAttribute("data-style");
+    }
+    try {
+      localStorage.setItem("style", pageStyle);
+    } catch (e) {}
+  }, [pageStyle]);
+
   const toggleTheme = () =>
     setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  const toggleStyle = () =>
+    setPageStyle((s) => (s === "craigslist" ? "" : "craigslist"));
 
   useEffect(() => {
     setOpen(false);
@@ -99,6 +123,23 @@ const Navbar = () => {
         </nav>
 
         <div className="nav-right">
+          <button
+            className={
+              "theme-toggle" + (pageStyle === "craigslist" ? " on" : "")
+            }
+            onClick={toggleStyle}
+            aria-label={
+              pageStyle === "craigslist"
+                ? "Back to the normal look"
+                : "Craigslist mode"
+            }
+            title={
+              pageStyle === "craigslist" ? "Back to normal" : "Craigslist mode"
+            }
+          >
+            <FaPeace />
+          </button>
+
           <button
             className="theme-toggle"
             onClick={toggleTheme}

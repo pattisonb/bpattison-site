@@ -259,6 +259,73 @@
   font-weight: 600;
 }
 
+/* craigslist mode: track and artist cards become little gallery listings */
+[data-style="craigslist"] .tracks-container {
+  display: block;
+}
+
+[data-style="craigslist"] .tracks-column {
+  margin-bottom: 44px;
+}
+
+[data-style="craigslist"] .tracks-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+[data-style="craigslist"] .recently-played-element,
+[data-style="craigslist"] .top-artist-element {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 34px 12px 10px;
+  border: 1px solid #ddd;
+}
+
+[data-style="craigslist"] .recently-played-element::before,
+[data-style="craigslist"] .top-artist-element::before {
+  content: "$0";
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  color: #090;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+[data-style="craigslist"] .recently-played-element::after,
+[data-style="craigslist"] .top-artist-element::after {
+  content: "\2606  <1hr ago \00b7 my spotify";
+  display: block;
+  margin-top: 10px;
+  color: #666;
+  font-size: 0.8rem;
+}
+
+[data-style="craigslist"] .album-cover,
+[data-style="craigslist"] .artist-image {
+  width: 70%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  margin: 0 auto 10px;
+  border: 1px solid #eee;
+}
+
+[data-style="craigslist"] .song-title {
+  color: #0000ee;
+  text-decoration: underline;
+  font-weight: 400;
+  white-space: normal;
+}
+
+[data-style="craigslist"] .top-artist-element .artist-name a {
+  color: #0000ee;
+  text-decoration: underline;
+  font-weight: 400;
+}
+
 /* Mobile Responsive */
 @media (max-width: 900px) {
   .tracks-container {

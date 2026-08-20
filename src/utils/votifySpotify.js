@@ -71,6 +71,19 @@ export async function getPlaylistTracks(token, playlistId) {
   return (data.items || []).map((i) => i.track).filter((t) => t && t.id);
 }
 
+// Full details for many tracks at once, 50 per request like the API allows.
+export async function getTracksBatch(token, trackIds) {
+  const out = [];
+  for (let i = 0; i < trackIds.length; i += 50) {
+    const { data } = await axios.get(`${BASE}/tracks`, {
+      headers: authHeader(token),
+      params: { ids: trackIds.slice(i, i + 50).join(",") },
+    });
+    out.push(...(data.tracks || []));
+  }
+  return out;
+}
+
 // Whether each track is already in the user's liked songs.
 export async function checkSavedTracks(token, trackIds) {
   const { data } = await axios.get(`${BASE}/me/tracks/contains`, {

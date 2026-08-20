@@ -35,6 +35,7 @@ import {
   searchTracks,
   getUser,
   getTrack,
+  getTracksBatch,
   getNowPlaying,
   addTrackToQueue,
   getMyPlaylists,
@@ -404,6 +405,7 @@ function Votify() {
   const alertedIce = useRef(new Set());
   const nameInputRef = useRef(null);
   const missingRoom = useRef(0);
+  const sessionDataRef = useRef(null); // live mirror of the session doc
 
   useEffect(() => {
     tracksRef.current = nominatedTracks;
@@ -423,18 +425,20 @@ function Votify() {
 
   // let escape close the popups
   useEffect(() => {
-    if (!showInfo && !showSettings && !showQr && !showAddTo) return;
+    if (!showInfo && !showSettings && !showQr && !showAddTo && !showMembers)
+      return;
     const onKey = (e) => {
       if (e.key === "Escape") {
         setShowInfo(false);
         setShowSettings(false);
         setShowQr(false);
         setShowAddTo(false);
+        setShowMembers(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showInfo, showSettings, showQr, showAddTo]);
+  }, [showInfo, showSettings, showQr, showAddTo, showMembers]);
 
   // flash the locked-in banner for a few seconds
   const showLocked = (name) => {
@@ -634,39 +638,43 @@ function Votify() {
     }
     const ref = collection(votifyDb, `${sessionID}:tracks`);
     const unsubscribe = onSnapshot(ref, (snapshot) => {
-      Promise.all(
-        snapshot.docs.map(async (d) => {
-          const data = d.data();
-          // track details never change, so look each song up once and keep
-          // it; one failed lookup skips that song instead of freezing the list
-          let details = detailsCache.current.get(d.id);
-          if (!details) {
-            try {
-              details = await getTrack(apiToken, d.id);
-              detailsCache.current.set(d.id, details);
-            } catch (e) {
-              console.error("Track lookup failed:", e);
-              return null;
-            }
+      const docs = snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+      const load = async () => {
+        // track details never change, so fetch the ones we haven't seen in
+        // one batched call instead of a request per song
+        const missing = docs
+          .map((d) => d.id)
+          .filter((id) => !detailsCache.current.has(id));
+        if (missing.length) {
+          try {
+            const fetched = await getTracksBatch(apiToken, missing);
+            fetched.forEach((t) => t && detailsCache.current.set(t.id, t));
+          } catch (e) {
+            console.error("Track lookup failed:", e);
           }
-          return {
-            ...details,
-            upvotes: data.upvotes || [],
-            downvotes: data.downvotes || [],
-            nominatedBy: data.nominatedBy,
-            nominatedById: data.nominatedById || null,
-            timestamp: data.timestamp,
-            purgatoryAt: data.purgatoryAt || null,
-            penalizedBy: data.penalizedBy || [],
-          };
-        })
-      ).then((tracks) => {
-        const loaded = tracks.filter(Boolean);
+        }
+        const loaded = docs
+          .map(({ id, data }) => {
+            const details = detailsCache.current.get(id);
+            if (!details) return null; // lookup failed, skip just this song
+            return {
+              ...details,
+              upvotes: data.upvotes || [],
+              downvotes: data.downvotes || [],
+              nominatedBy: data.nominatedBy,
+              nominatedById: data.nominatedById || null,
+              timestamp: data.timestamp,
+              purgatoryAt: data.purgatoryAt || null,
+              penalizedBy: data.penalizedBy || [],
+            };
+          })
+          .filter(Boolean);
         loaded.sort(
           (a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)
         );
         setNominatedTracks(loaded);
-      });
+      };
+      load();
     });
     return () => unsubscribe();
   }, [apiToken, sessionID]);
@@ -760,6 +768,76 @@ function Votify() {
     };
   }, [token, npId]);
 
+  // 4e. Guests mirror the session doc in real time instead of polling it, so
+  //     order flips, room settings, and the now playing header feel instant.
+  useEffect(() => {
+    if (!sessionID || role !== "guest") {
+      sessionDataRef.current = null;
+      return undefined;
+    }
+    const dataRef = doc(votifyDb, `${sessionID}:data`, `${sessionID}`);
+    let active = true;
+    const unsubscribe = onSnapshot(dataRef, (snap) => {
+      if (!active) return;
+      if (!snap.exists()) {
+        missingRoom.current += 1;
+        if (missingRoom.current >= 2) {
+          leaveSeat();
+          notify("This room was closed by the host.");
+        }
+        return;
+      }
+      missingRoom.current = 0;
+      const data = snap.data();
+      sessionDataRef.current = data;
+      if (data.hostToken) {
+        setHostToken((prev) =>
+          prev === data.hostToken ? prev : data.hostToken
+        );
+      }
+      setEndsAt(data.endsAt || null);
+      const mode = data.orderMode || "added";
+      if (mode !== orderModeRef.current) setOrderMode(mode);
+      const rules = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+      if (JSON.stringify(rules) !== JSON.stringify(settingsRef.current)) {
+        setSettings(rules);
+      }
+      const locked = data.lastLocked;
+      if (locked && locked.at) {
+        const ms = tsMs(locked.at);
+        // only flash fresh dispatches, and each one only once
+        if (ms > lastLockedAt.current && Date.now() - ms < 20000) {
+          lastLockedAt.current = ms;
+          showLocked(locked.name);
+          if (locked.by && locked.by === voterId) {
+            notify(`"${locked.name}" locked in — that was your pick!`);
+            buzz([100, 60, 100]);
+          }
+        }
+      }
+      if (
+        data.nowPlaying &&
+        data.hostToken &&
+        lastNowPlayingId.current !== data.nowPlaying
+      ) {
+        getTrack(data.hostToken, data.nowPlaying)
+          .then((details) => {
+            if (!active) return;
+            setNowPlaying(details);
+            // only mark it handled once the lookup worked, so a failed
+            // fetch retries on the next pass
+            lastNowPlayingId.current = data.nowPlaying;
+          })
+          .catch((e) => console.error("Now playing lookup failed:", e));
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, sessionID]);
+
   // 5. The session heartbeat. The host publishes playback, a borrow token, and
   //    the order mode; hands the next song to Spotify just before the current
   //    one ends; and enforces the thin ice timers. Guests read everything.
@@ -810,59 +888,23 @@ function Votify() {
           }
           refereeToken = token;
         } else {
-          const snap = await getDoc(dataRef);
-          const data = snap.data();
-          if (!data) {
-            // a few misses in a row means the room is really gone
-            missingRoom.current += 1;
-            if (missingRoom.current >= 3 && !cancelled) {
-              leaveSeat();
-              notify("This room was closed by the host.");
-            }
-            return;
-          }
-          missingRoom.current = 0;
-          if (data.hostToken && data.hostToken !== hostToken && !cancelled) {
-            setHostToken(data.hostToken);
-          }
+          // the realtime mirror keeps guest state fresh; this slow path only
+          // retries failed lookups and decides whether I'm the deputy
+          const data = sessionDataRef.current;
+          if (!data) return;
           const borrow = data.hostToken || hostToken;
-          if (data.nowPlaying && borrow && lastNowPlayingId.current !== data.nowPlaying) {
+          if (
+            data.nowPlaying &&
+            borrow &&
+            lastNowPlayingId.current !== data.nowPlaying
+          ) {
             try {
               const details = await getTrack(borrow, data.nowPlaying);
               if (!cancelled) {
                 setNowPlaying(details);
-                // only mark it handled once the lookup worked, so a failed
-                // fetch right after a refresh retries on the next tick
                 lastNowPlayingId.current = data.nowPlaying;
               }
-            } catch (e) {
-              console.error("Now playing lookup failed:", e);
-            }
-          }
-          if (!cancelled) setEndsAt(data.endsAt || null);
-          const mode = data.orderMode || "added";
-          if (!cancelled && mode !== orderModeRef.current) {
-            setOrderMode(mode);
-          }
-          const rules = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-          if (
-            !cancelled &&
-            JSON.stringify(rules) !== JSON.stringify(settingsRef.current)
-          ) {
-            setSettings(rules);
-          }
-          const locked = data.lastLocked;
-          if (locked && locked.at && !cancelled) {
-            const ms = tsMs(locked.at);
-            // only flash fresh dispatches, and each one only once
-            if (ms > lastLockedAt.current && Date.now() - ms < 20000) {
-              lastLockedAt.current = ms;
-              showLocked(locked.name);
-              if (locked.by && locked.by === voterId) {
-                notify(`"${locked.name}" locked in — that was your pick!`);
-                buzz([100, 60, 100]);
-              }
-            }
+            } catch (e) {}
           }
 
           // host heartbeat check: stale means the deputy steps up, and the
@@ -1801,19 +1843,82 @@ function Votify() {
               </div>
             </div>
 
-            {showMembers && (
-              <div className="votify-members">
-                <span className="section-label">
-                  {activeMembers.length} in the room
+            {/* phones get a thumb-reach bar instead of the header buttons */}
+            <div className="votify-actionbar">
+              <button
+                className="votify-btn votify-bar-add"
+                onClick={() =>
+                  searchOpen ? closeNominate() : setSearchOpen(true)
+                }
+              >
+                <FaSearch /> {searchOpen ? "Close" : "Add a song"}
+              </button>
+              <a
+                className="votify-bar-btn"
+                href={inviteLink()}
+                aria-label="Invite by text"
+              >
+                <FaCommentDots />
+              </a>
+              <button
+                className="votify-bar-btn"
+                onClick={openQr}
+                aria-label="Show a QR code to join"
+              >
+                <FaQrcode />
+              </button>
+              <button
+                className="votify-bar-btn"
+                onClick={() => setShowMembers((v) => !v)}
+                aria-label="Who's here"
+              >
+                <FaUsers />
+                <span className="votify-bar-count">
+                  {activeMembers.length}
                 </span>
-                <ul>
-                  {activeMembers.map((m) => (
-                    <li key={m.id}>
-                      {m.name}
-                      {m.host && <span className="votify-host-tag">host</span>}
-                    </li>
-                  ))}
-                </ul>
+              </button>
+              {role === "host" && (
+                <button
+                  className="votify-bar-btn"
+                  onClick={openSettings}
+                  aria-label="Room settings"
+                >
+                  <FaCog />
+                </button>
+              )}
+            </div>
+
+            {showMembers && (
+              <div
+                className="votify-modal-overlay"
+                onClick={() => setShowMembers(false)}
+              >
+                <div
+                  className="votify-modal votify-members"
+                  role="dialog"
+                  aria-label="Who's in the room"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="votify-dismiss"
+                    onClick={() => setShowMembers(false)}
+                    aria-label="Close"
+                  >
+                    <FaTimes />
+                  </button>
+                  <h2>{activeMembers.length} in the room</h2>
+                  <ul>
+                    {activeMembers.map((m) => (
+                      <li key={m.id}>
+                        {m.name}
+                        {m.host && (
+                          <span className="votify-host-tag">host</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
 

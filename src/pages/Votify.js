@@ -8,6 +8,9 @@ import {
   FaSearch,
   FaInfoCircle,
   FaCommentDots,
+  FaCog,
+  FaUsers,
+  FaArrowLeft,
 } from "react-icons/fa";
 import {
   collection,
@@ -27,6 +30,9 @@ import {
   getTrack,
   getNowPlaying,
   addTrackToQueue,
+  getMyPlaylists,
+  getPlaylistTracks,
+  getSavedTracks,
 } from "../utils/votifySpotify";
 import {
   beginLogin,
@@ -35,10 +41,16 @@ import {
 } from "../utils/votifyAuth";
 import "../styles/Votify.css";
 
-// how long a zero-vote song survives on thin ice (each downvote cuts a minute)
-const PURGATORY_SECONDS = 300;
 // how close to the end of the current song we hand the next one to Spotify
 const DISPATCH_WINDOW_MS = 15000;
+
+// the session rules; the host can change all of these from the gear menu
+const DEFAULT_SETTINGS = {
+  iceSeconds: 300, // how long a song survives on thin ice
+  penaltySeconds: 60, // how much time each downvote on the ice costs
+  rescueScore: 1, // the score that pulls a song off the ice
+  killScore: -3, // the score that removes a song on the spot
+};
 
 const LS = {
   token: "votify_token",
@@ -91,13 +103,13 @@ const purgatoryStart = (t) => {
   return typeof p.toDate === "function" ? p.toDate() : new Date(p);
 };
 
-const purgatoryRemaining = (t) => {
+const purgatoryRemaining = (t, rules) => {
   const start = purgatoryStart(t);
-  if (!start) return PURGATORY_SECONDS;
-  const penalty = (t.penalizedBy || []).length * 60;
+  if (!start) return rules.iceSeconds;
+  const penalty = (t.penalizedBy || []).length * rules.penaltySeconds;
   return Math.max(
     0,
-    PURGATORY_SECONDS - penalty - Math.floor((Date.now() - start.getTime()) / 1000)
+    rules.iceSeconds - penalty - Math.floor((Date.now() - start.getTime()) / 1000)
   );
 };
 
@@ -192,7 +204,7 @@ function SearchResult({ track, onNominate, nominated }) {
   );
 }
 
-function SessionTrack({ track, position, voter, onVote, purgatory }) {
+function SessionTrack({ track, position, voter, onVote, purgatory, rules }) {
   const score = trackScore(track);
   const canVote = voter !== (track.nominatedById || track.nominatedBy);
   const votedUp = (track.upvotes || []).includes(voter);
@@ -200,17 +212,17 @@ function SessionTrack({ track, position, voter, onVote, purgatory }) {
   const albumImage = track.album?.images?.[0]?.url;
 
   const [remaining, setRemaining] = useState(
-    purgatory ? purgatoryRemaining(track) : 0
+    purgatory ? purgatoryRemaining(track, rules) : 0
   );
   useEffect(() => {
     if (!purgatory) return undefined;
-    setRemaining(purgatoryRemaining(track));
+    setRemaining(purgatoryRemaining(track, rules));
     const interval = setInterval(
-      () => setRemaining(purgatoryRemaining(track)),
+      () => setRemaining(purgatoryRemaining(track, rules)),
       1000
     );
     return () => clearInterval(interval);
-  }, [purgatory, track]);
+  }, [purgatory, track, rules]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
@@ -229,7 +241,7 @@ function SessionTrack({ track, position, voter, onVote, purgatory }) {
         </p>
         {purgatory && (
           <span className="votify-nom-timer">
-            {formatted} left, a vote up saves it
+            {formatted} left, saved at +{rules.rescueScore}
           </span>
         )}
       </div>
@@ -271,11 +283,25 @@ function Votify() {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [endsAt, setEndsAt] = useState(null); // rough ms timestamp the current song ends
   const [orderMode, setOrderMode] = useState("added"); // "added" | "votes"
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [members, setMembers] = useState([]);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [draft, setDraft] = useState(null); // settings form values while editing
   const [searchKey, setSearchKey] = useState("");
   const [results, setResults] = useState([]);
+
+  // nominate-from-your-library state (only for people logged into Spotify)
+  const [nomTab, setNomTab] = useState("search"); // "search" | "playlists" | "liked"
+  const [playlists, setPlaylists] = useState(null);
+  const [activePlaylist, setActivePlaylist] = useState(null);
+  const [playlistTracks, setPlaylistTracks] = useState([]);
+  const [likedTracks, setLikedTracks] = useState(null);
+  const [likedDone, setLikedDone] = useState(false);
+  const [libNote, setLibNote] = useState(null);
 
   const [sessionIdInput, setSessionIdInput] = useState("");
   const [guestName, setGuestName] = useState("");
@@ -287,6 +313,7 @@ function Votify() {
   const dispatchedFor = useRef(null);
   const tracksRef = useRef([]);
   const orderModeRef = useRef("added");
+  const settingsRef = useRef(DEFAULT_SETTINGS);
   const detailsCache = useRef(new Map());
 
   useEffect(() => {
@@ -297,19 +324,27 @@ function Votify() {
     orderModeRef.current = orderMode;
   }, [orderMode]);
 
-  // let escape close the how-it-works popup
   useEffect(() => {
-    if (!showInfo) return;
+    settingsRef.current = settings;
+  }, [settings]);
+
+  // let escape close the popups
+  useEffect(() => {
+    if (!showInfo && !showSettings) return;
     const onKey = (e) => {
-      if (e.key === "Escape") setShowInfo(false);
+      if (e.key === "Escape") {
+        setShowInfo(false);
+        setShowSettings(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showInfo]);
+  }, [showInfo, showSettings]);
 
-  // The token used for read-only Spotify calls (search / track lookup): the
-  // host uses their own; guests borrow the host's from the session doc.
-  const apiToken = role === "host" ? token : hostToken;
+  // The token used for read-only Spotify calls (search / track lookup): anyone
+  // logged into Spotify uses their own (so results match their account);
+  // everyone else borrows the host's from the session doc.
+  const apiToken = token || hostToken;
 
   const saveTokens = (data) => {
     writeLS(LS.token, data.access_token);
@@ -330,6 +365,18 @@ function Votify() {
         window.history.replaceState(null, "", window.location.pathname);
       }
 
+      // restore a guest seat first so a Spotify login from inside a session
+      // comes back to the same room
+      if (readLS(LS.role) === "guest") {
+        const sid = readLS(LS.sessionID);
+        if (sid && active) {
+          setRole("guest");
+          setSessionID(sid);
+          setSessionLeader(readLS(LS.leader) || "");
+          setUser(readLS(LS.name) || randomGuest());
+        }
+      }
+
       const code = params.get("code");
       if (code) {
         try {
@@ -341,17 +388,6 @@ function Votify() {
           if (active) setError("Spotify login failed — please try again.");
         }
         window.history.replaceState(null, "", window.location.pathname);
-        return;
-      }
-
-      if (readLS(LS.role) === "guest") {
-        const sid = readLS(LS.sessionID);
-        if (sid && active) {
-          setRole("guest");
-          setSessionID(sid);
-          setSessionLeader(readLS(LS.leader) || "");
-          setUser(readLS(LS.name) || randomGuest());
-        }
         return;
       }
 
@@ -385,7 +421,8 @@ function Votify() {
       .then((data) => {
         if (!active) return;
         const name = data.display_name || data.id || "Host";
-        setUser(name);
+        // someone seated as a guest keeps the name they joined with
+        if (readLS(LS.role) !== "guest") setUser(name);
         setSpotifyId(data.id || "");
         if (readLS(LS.role) === "host") {
           const sid = readLS(LS.sessionID);
@@ -393,6 +430,16 @@ function Votify() {
             setRole("host");
             setSessionID(sid);
             setSessionLeader(readLS(LS.leader) || name);
+            // pick the room's rules and order back up after a refresh
+            getDoc(doc(votifyDb, `${sid}:data`, sid))
+              .then((snap) => {
+                if (!active || !snap.exists()) return;
+                const room = snap.data();
+                setOrderMode(room.orderMode || "added");
+                if (room.settings)
+                  setSettings({ ...DEFAULT_SETTINGS, ...room.settings });
+              })
+              .catch(() => {});
           }
         }
       })
@@ -471,6 +518,33 @@ function Votify() {
     return () => unsubscribe();
   }, [apiToken, sessionID]);
 
+  // 4b. Who's in the room. Everyone keeps a small member doc beside the
+  //     session doc, so the list stays live without any extra polling.
+  useEffect(() => {
+    if (!sessionID) {
+      setMembers([]);
+      return undefined;
+    }
+    const ref = collection(votifyDb, `${sessionID}:data`);
+    const unsubscribe = onSnapshot(ref, (snapshot) => {
+      const list = [];
+      snapshot.docs.forEach((d) => {
+        if (d.id === sessionID) return;
+        const data = d.data();
+        if (data.name) list.push({ id: d.id, name: data.name, host: !!data.host });
+      });
+      list.sort(
+        (a, b) =>
+          (b.host ? 1 : 0) - (a.host ? 1 : 0) || a.name.localeCompare(b.name)
+      );
+      setMembers(list);
+    });
+    return () => unsubscribe();
+  }, [sessionID]);
+
+  const memberDoc = (sid) =>
+    doc(votifyDb, `${sid}:data`, `member_${voterId}`);
+
   // 5. The session heartbeat. The host publishes playback, a borrow token, and
   //    the order mode; hands the next song to Spotify just before the current
   //    one ends; and enforces the thin ice timers. Guests read everything.
@@ -519,17 +593,36 @@ function Votify() {
             await setDoc(dataRef, { endsAt: ends }, { merge: true });
           }
 
+          const rules = settingsRef.current;
           const tracks = tracksRef.current;
           const queued = orderTracks(
-            tracks.filter((t) => trackScore(t) > 0),
+            tracks.filter((t) => trackScore(t) > 0 && !t.purgatoryAt),
             orderModeRef.current
           );
 
-          // the host is the referee: stamp songs onto thin ice when they hit
-          // zero, and clear the stamp (and penalties) when they're rescued
+          // any removal double-checks a fresh read first: our snapshot can
+          // be a few seconds stale, and votes cast in that window count
+          const freshRead = async (id) => {
+            const snap = await getDoc(trackDoc(id));
+            return snap.exists() ? snap.data() : null;
+          };
+
+          // the host is the referee: songs at or below the kill score go
+          // immediately, songs at zero get stamped onto thin ice, and songs
+          // that reach the rescue score get their stamp (and penalties) back
           for (const t of tracks) {
             const s = trackScore(t);
-            if (s > 0 && (t.purgatoryAt || (t.penalizedBy || []).length)) {
+            if (s <= rules.killScore) {
+              const fresh = await freshRead(t.id);
+              if (fresh && trackScore(fresh) <= rules.killScore) {
+                await deleteDoc(trackDoc(t.id));
+              }
+              continue;
+            }
+            if (
+              s >= rules.rescueScore &&
+              (t.purgatoryAt || (t.penalizedBy || []).length)
+            ) {
               await updateDoc(trackDoc(t.id), {
                 purgatoryAt: null,
                 penalizedBy: [],
@@ -539,11 +632,23 @@ function Votify() {
             }
           }
 
-          // thin ice: when time runs out, negative scores are removed and a
-          // zero only plays if nothing else is queued, otherwise it's trashed
-          for (const t of tracks.filter((t) => trackScore(t) <= 0)) {
-            if (!t.purgatoryAt || purgatoryRemaining(t) > 0) continue;
-            if (trackScore(t) === 0 && queued.length === 0) {
+          // thin ice: when time runs out, anything above zero rejoins the
+          // queue, negative scores are removed, and a zero only plays if
+          // nothing else is queued, otherwise it's trashed
+          for (const t of tracks.filter((t) => t.purgatoryAt)) {
+            if (purgatoryRemaining(t, rules) > 0) continue;
+            const fresh = await freshRead(t.id);
+            if (!fresh || !fresh.purgatoryAt) continue; // gone or rescued
+            if (purgatoryRemaining(fresh, rules) > 0) continue; // clock reset
+            const s = trackScore(fresh);
+            if (s > 0) {
+              await updateDoc(trackDoc(t.id), {
+                purgatoryAt: null,
+                penalizedBy: [],
+              });
+              continue;
+            }
+            if (s === 0 && queued.length === 0) {
               try {
                 await addTrackToQueue(token, t.id);
               } catch (e) {
@@ -604,6 +709,13 @@ function Votify() {
           if (!cancelled && mode !== orderModeRef.current) {
             setOrderMode(mode);
           }
+          const rules = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+          if (
+            !cancelled &&
+            JSON.stringify(rules) !== JSON.stringify(settingsRef.current)
+          ) {
+            setSettings(rules);
+          }
         }
       } catch (e) {
         // transient network/playback errors are fine to skip
@@ -645,11 +757,14 @@ function Votify() {
         leaderId: spotifyId,
         hostToken: token,
         orderMode: "added",
+        settings: DEFAULT_SETTINGS,
       });
+      await setDoc(memberDoc(id), { name: user, host: true });
       setRole("host");
       setSessionID(id);
       setSessionLeader(user);
       setOrderMode("added");
+      setSettings(DEFAULT_SETTINGS);
       lastNowPlayingId.current = null;
       lastPublishedToken.current = token;
       dispatchedFor.current = null;
@@ -680,10 +795,14 @@ function Votify() {
         token &&
         (data.leaderId ? data.leaderId === spotifyId : data.leader === user);
       if (isMyRoom) {
+        setDoc(memberDoc(id), { name: data.leader || user, host: true }).catch(
+          () => {}
+        );
         setRole("host");
         setSessionID(id);
         setSessionLeader(data.leader || user);
         setOrderMode(data.orderMode || "added");
+        setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
         lastNowPlayingId.current = null;
         lastPublishedToken.current = null; // republish a fresh token next tick
         dispatchedFor.current = null;
@@ -695,11 +814,13 @@ function Votify() {
         return;
       }
 
+      setDoc(memberDoc(id), { name, host: false }).catch(() => {});
       setRole("guest");
       setSessionID(id);
       setSessionLeader(data.leader || "");
       setHostToken(data.hostToken || "");
       setOrderMode(data.orderMode || "added");
+      setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
       setUser(name);
       lastNowPlayingId.current = null;
       writeLS(LS.role, "guest");
@@ -722,15 +843,24 @@ function Votify() {
       if (!sure) return;
     }
     const wasGuest = role === "guest";
+    if (sessionID) deleteDoc(memberDoc(sessionID)).catch(() => {});
     setSessionID("");
     setSessionLeader("");
     setNowPlaying(null);
     setEndsAt(null);
     setHostToken("");
     setOrderMode("added");
+    setSettings(DEFAULT_SETTINGS);
     setSearchOpen(false);
     setResults([]);
     setRole("");
+    setShowMembers(false);
+    setShowSettings(false);
+    setNomTab("search");
+    setPlaylists(null);
+    setActivePlaylist(null);
+    setLikedTracks(null);
+    setLibNote(null);
     lastNowPlayingId.current = null;
     lastEndsAt.current = null;
     dispatchedFor.current = null;
@@ -795,7 +925,7 @@ function Votify() {
       const ups =
         (track.upvotes || []).filter((u) => u !== voterId).length + 1;
       const downs = (track.downvotes || []).filter((u) => u !== voterId).length;
-      if (ups - downs > 0) {
+      if (ups - downs >= settingsRef.current.rescueScore) {
         update.purgatoryAt = null;
         update.penalizedBy = [];
       }
@@ -807,16 +937,109 @@ function Votify() {
 
   const nominatedIds = nominatedTracks.map((t) => t.id);
   const queuedTracks = orderTracks(
-    nominatedTracks.filter((t) => trackScore(t) > 0),
+    nominatedTracks.filter((t) => trackScore(t) > 0 && !t.purgatoryAt),
     orderMode
   );
-  const thinIceTracks = nominatedTracks.filter((t) => trackScore(t) <= 0);
+  const thinIceTracks = nominatedTracks.filter(
+    (t) => trackScore(t) <= 0 || t.purgatoryAt
+  );
 
   // prefilled text message invite; the button only shows on small screens
   const inviteLink = () => {
     const url = `${window.location.origin}/projects/votify?join=${sessionID}`;
     const msg = `Help pick what plays next! Join my Votify room with code ${sessionID}: ${url}`;
     return `sms:?&body=${encodeURIComponent(msg)}`;
+  };
+
+  // library tabs: only people logged into Spotify get these, and older logins
+  // may be missing the library scopes until they log in again
+  const libError = (e) => {
+    if (e.response && e.response.status === 403) {
+      setLibNote(
+        "Your Spotify login doesn't have library access yet. Log out and back in to grant it."
+      );
+    } else {
+      setLibNote("Couldn't load that from Spotify. Try again.");
+    }
+  };
+
+  const openTab = async (tab) => {
+    setNomTab(tab);
+    setLibNote(null);
+    try {
+      if (tab === "playlists" && playlists === null) {
+        setPlaylists(await getMyPlaylists(token));
+      }
+      if (tab === "liked" && likedTracks === null) {
+        const items = await getSavedTracks(token, 0);
+        setLikedTracks(items);
+        setLikedDone(items.length < 50);
+      }
+    } catch (e) {
+      libError(e);
+    }
+  };
+
+  const openPlaylist = async (playlist) => {
+    try {
+      setActivePlaylist(playlist);
+      setPlaylistTracks(await getPlaylistTracks(token, playlist.id));
+      setLibNote(null);
+    } catch (e) {
+      setActivePlaylist(null);
+      libError(e);
+    }
+  };
+
+  const loadMoreLiked = async () => {
+    try {
+      const items = await getSavedTracks(token, likedTracks.length);
+      setLikedTracks([...likedTracks, ...items]);
+      if (items.length < 50) setLikedDone(true);
+    } catch (e) {
+      libError(e);
+    }
+  };
+
+  const closeNominate = () => {
+    setSearchOpen(false);
+    setResults([]);
+    setSearchKey("");
+    setNomTab("search");
+    setActivePlaylist(null);
+    setLibNote(null);
+  };
+
+  // the settings form edits a draft so a half-typed number never hits the room
+  const openSettings = () => {
+    setDraft({
+      iceMinutes: String(settings.iceSeconds / 60),
+      penaltySeconds: String(settings.penaltySeconds),
+      rescueScore: String(settings.rescueScore),
+      killScore: String(settings.killScore),
+    });
+    setShowSettings(true);
+  };
+
+  const saveSettings = () => {
+    const clamp = (value, lo, hi, fallback) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.min(hi, Math.max(lo, Math.round(n)));
+    };
+    const next = {
+      iceSeconds: clamp(draft.iceMinutes, 1, 60, 5) * 60,
+      penaltySeconds: clamp(draft.penaltySeconds, 0, 600, 60),
+      rescueScore: clamp(draft.rescueScore, 1, 10, 1),
+      killScore: clamp(draft.killScore, -20, -1, -3),
+    };
+    setSettings(next);
+    setShowSettings(false);
+    setDoc(
+      doc(votifyDb, `${sessionID}:data`, `${sessionID}`),
+      { settings: next },
+      { merge: true }
+    ).catch((e) => console.error("Settings update failed:", e));
   };
 
   return (
@@ -920,12 +1143,33 @@ function Votify() {
                 </h2>
               </div>
               <div className="votify-session-actions">
+                <button
+                  className={
+                    "votify-members-btn" + (showMembers ? " active" : "")
+                  }
+                  onClick={() => setShowMembers((v) => !v)}
+                  title="Who's here"
+                >
+                  <FaUsers /> {members.length}
+                </button>
+                {role === "host" && (
+                  <button
+                    className="votify-members-btn"
+                    onClick={openSettings}
+                    title="Room settings"
+                    aria-label="Room settings"
+                  >
+                    <FaCog />
+                  </button>
+                )}
                 <a className="votify-btn votify-invite" href={inviteLink()}>
                   <FaCommentDots /> Invite by text
                 </a>
                 <button
                   className="votify-btn"
-                  onClick={() => setSearchOpen((v) => !v)}
+                  onClick={() =>
+                    searchOpen ? closeNominate() : setSearchOpen(true)
+                  }
                 >
                   <FaSearch /> {searchOpen ? "Close" : "Search & nominate"}
                 </button>
@@ -938,6 +1182,22 @@ function Votify() {
               </div>
             </div>
 
+            {showMembers && (
+              <div className="votify-members">
+                <span className="section-label">
+                  {members.length} in the room
+                </span>
+                <ul>
+                  {members.map((m) => (
+                    <li key={m.id}>
+                      {m.name}
+                      {m.host && <span className="votify-host-tag">host</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {nowPlaying && nowPlaying.album && (
               <NowPlaying track={nowPlaying} endsAt={endsAt} />
             )}
@@ -947,44 +1207,170 @@ function Votify() {
                 <button
                   type="button"
                   className="votify-dismiss"
-                  onClick={() => {
-                    setSearchOpen(false);
-                    setResults([]);
-                    setSearchKey("");
-                  }}
+                  onClick={closeNominate}
                   aria-label="Close search"
                   title="Close search"
                 >
                   <FaTimes />
                 </button>
-                <form className="votify-search-form" onSubmit={handleSearch}>
-                  <input
-                    className="votify-input"
-                    type="text"
-                    value={searchKey}
-                    onChange={(e) => setSearchKey(e.target.value)}
-                    placeholder="Search Spotify for a track..."
-                  />
-                  <button className="votify-btn" type="submit">
-                    Search
-                  </button>
-                </form>
-                {!apiToken && (
-                  <p className="votify-note">
-                    Waiting for the host's connection before search is
-                    available…
-                  </p>
+
+                {token && (
+                  <div className="votify-tabs">
+                    <button
+                      className={
+                        "votify-tab" + (nomTab === "search" ? " active" : "")
+                      }
+                      onClick={() => openTab("search")}
+                    >
+                      Search
+                    </button>
+                    <button
+                      className={
+                        "votify-tab" +
+                        (nomTab === "playlists" ? " active" : "")
+                      }
+                      onClick={() => openTab("playlists")}
+                    >
+                      My playlists
+                    </button>
+                    <button
+                      className={
+                        "votify-tab" + (nomTab === "liked" ? " active" : "")
+                      }
+                      onClick={() => openTab("liked")}
+                    >
+                      Liked songs
+                    </button>
+                  </div>
                 )}
-                <div className="votify-results">
-                  {results.map((track) => (
-                    <SearchResult
-                      key={track.id}
-                      track={track}
-                      onNominate={handleNominate}
-                      nominated={nominatedIds.includes(track.id)}
-                    />
-                  ))}
-                </div>
+
+                {nomTab === "search" && (
+                  <>
+                    <form
+                      className="votify-search-form"
+                      onSubmit={handleSearch}
+                    >
+                      <input
+                        className="votify-input"
+                        type="text"
+                        value={searchKey}
+                        onChange={(e) => setSearchKey(e.target.value)}
+                        placeholder="Search Spotify for a track..."
+                      />
+                      <button className="votify-btn" type="submit">
+                        Search
+                      </button>
+                    </form>
+                    {!apiToken && (
+                      <p className="votify-note">
+                        Waiting for the host's connection before search is
+                        available…
+                      </p>
+                    )}
+                    {!token && apiToken && (
+                      <p className="votify-note">
+                        <button
+                          type="button"
+                          className="votify-inline-link"
+                          onClick={() => beginLogin()}
+                        >
+                          Connect your own Spotify
+                        </button>{" "}
+                        to search with your account and nominate straight from
+                        your playlists and liked songs.
+                      </p>
+                    )}
+                    <div className="votify-results">
+                      {results.map((track) => (
+                        <SearchResult
+                          key={track.id}
+                          track={track}
+                          onNominate={handleNominate}
+                          nominated={nominatedIds.includes(track.id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {nomTab === "playlists" && !activePlaylist && (
+                  <div className="votify-playlists">
+                    {(playlists || []).map((playlist) => (
+                      <button
+                        key={playlist.id}
+                        className="votify-playlist"
+                        onClick={() => openPlaylist(playlist)}
+                      >
+                        {playlist.images?.[0]?.url && (
+                          <img
+                            src={playlist.images[0].url}
+                            alt={playlist.name}
+                          />
+                        )}
+                        <span className="votify-playlist-name">
+                          {playlist.name}
+                        </span>
+                        <span className="votify-playlist-count">
+                          {playlist.tracks?.total ?? 0} songs
+                        </span>
+                      </button>
+                    ))}
+                    {playlists && playlists.length === 0 && (
+                      <p className="votify-note">No playlists found.</p>
+                    )}
+                  </div>
+                )}
+
+                {nomTab === "playlists" && activePlaylist && (
+                  <>
+                    <button
+                      type="button"
+                      className="votify-inline-link votify-back"
+                      onClick={() => setActivePlaylist(null)}
+                    >
+                      <FaArrowLeft /> All playlists
+                    </button>
+                    <p className="votify-note votify-playlist-title">
+                      {activePlaylist.name}
+                    </p>
+                    <div className="votify-results">
+                      {playlistTracks.map((track) => (
+                        <SearchResult
+                          key={track.id}
+                          track={track}
+                          onNominate={handleNominate}
+                          nominated={nominatedIds.includes(track.id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {nomTab === "liked" && (
+                  <>
+                    <div className="votify-results">
+                      {(likedTracks || []).map((track) => (
+                        <SearchResult
+                          key={track.id}
+                          track={track}
+                          onNominate={handleNominate}
+                          nominated={nominatedIds.includes(track.id)}
+                        />
+                      ))}
+                    </div>
+                    {likedTracks && likedTracks.length > 0 && !likedDone && (
+                      <button
+                        type="button"
+                        className="votify-inline-link votify-more"
+                        onClick={loadMoreLiked}
+                      >
+                        Load more
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {libNote && <p className="votify-note">{libNote}</p>}
               </div>
             )}
 
@@ -1031,6 +1417,7 @@ function Votify() {
                       position={i + 1}
                       voter={voterId}
                       onVote={castVote}
+                      rules={settings}
                     />
                   ))}
                 </div>
@@ -1053,6 +1440,7 @@ function Votify() {
                       voter={voterId}
                       onVote={castVote}
                       purgatory
+                      rules={settings}
                     />
                   ))}
                 </div>
@@ -1073,6 +1461,89 @@ function Votify() {
           if you want to see where it came from.
         </p>
       </div>
+
+      {showSettings && draft && (
+        <div
+          className="votify-modal-overlay"
+          onClick={() => setShowSettings(false)}
+        >
+          <div
+            className="votify-modal"
+            role="dialog"
+            aria-label="Room settings"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="votify-dismiss"
+              onClick={() => setShowSettings(false)}
+              aria-label="Close"
+            >
+              <FaTimes />
+            </button>
+            <h2>Room settings</h2>
+            <p>These apply to everyone in the room right away.</p>
+            <div className="votify-settings-form">
+              <label>
+                Thin ice timer (minutes)
+                <input
+                  className="votify-input"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={draft.iceMinutes}
+                  onChange={(e) =>
+                    setDraft({ ...draft, iceMinutes: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Time each downvote costs (seconds)
+                <input
+                  className="votify-input"
+                  type="number"
+                  min="0"
+                  max="600"
+                  step="15"
+                  value={draft.penaltySeconds}
+                  onChange={(e) =>
+                    setDraft({ ...draft, penaltySeconds: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Score that saves a song from the ice
+                <input
+                  className="votify-input"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={draft.rescueScore}
+                  onChange={(e) =>
+                    setDraft({ ...draft, rescueScore: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Score that removes a song instantly
+                <input
+                  className="votify-input"
+                  type="number"
+                  min="-20"
+                  max="-1"
+                  value={draft.killScore}
+                  onChange={(e) =>
+                    setDraft({ ...draft, killScore: e.target.value })
+                  }
+                />
+              </label>
+              <button className="votify-btn" onClick={saveSettings}>
+                Save settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showInfo && (
         <div className="votify-modal-overlay" onClick={() => setShowInfo(false)}>
@@ -1110,11 +1581,12 @@ function Votify() {
             </p>
             <h3>Thin ice</h3>
             <p>
-              A song that drops to zero or below lands on thin ice with five
-              minutes on the clock, and every fresh downvote cuts a minute
-              off. Climb back above zero and it rejoins the queue. If time
-              runs out, a negative song is gone for good; a song sitting at
-              exactly zero only plays if nothing else is waiting.
+              A song that drops to zero or below lands on thin ice with a
+              timer, and every fresh downvote cuts it shorter. Climb back up
+              and it rejoins the queue; sink far enough and it's removed on
+              the spot. When time runs out, a negative song is gone for good
+              and a song at exactly zero only plays if nothing else is
+              waiting. The host sets the exact numbers in the room settings.
             </p>
             <h3>The handoff</h3>
             <p>

@@ -588,23 +588,315 @@
   line-height: 1.55;
 }
 
+/* Members + room settings */
+.votify-members-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 15px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.votify-members-btn:hover,
+.votify-members-btn.active {
+  border-color: var(--votify);
+  color: var(--votify);
+}
+
+.votify-members {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 28px;
+}
+
+.votify-members ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.votify-members li {
+  font-size: 0.95rem;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.votify-host-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--votify);
+  background: var(--votify-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.votify-settings-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.votify-settings-form label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+.votify-settings-form .votify-input {
+  flex: 0 0 96px;
+  text-align: center;
+  padding: 8px 12px;
+}
+
+.votify-settings-form .votify-btn {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+/* Nominate tabs + library browsing */
+.votify-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 40px 18px 0;
+}
+
+.votify-tab {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 15px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.votify-tab:hover {
+  border-color: var(--votify);
+  color: var(--votify);
+}
+
+.votify-tab.active {
+  border-color: var(--votify);
+  color: var(--votify);
+  background: var(--votify-soft);
+}
+
+.votify-inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--votify);
+  cursor: pointer;
+}
+
+.votify-inline-link:hover {
+  text-decoration: underline;
+}
+
+.votify-back {
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.votify-playlist-title {
+  margin: 0 0 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.votify-more {
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+
+.votify-playlists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.votify-playlist {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font-family: var(--font-body);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.votify-playlist:hover {
+  border-color: var(--votify);
+}
+
+.votify-playlist img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.votify-playlist-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.votify-playlist-count {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 /* texting only makes sense on a phone */
 .votify-invite {
   display: none;
   text-decoration: none;
 }
 
+/* Small screens: stack the header, single-column lists, bigger touch targets */
 @media (max-width: 720px) {
+  .votify-hero {
+    padding: 40px 0 28px;
+    margin-bottom: 28px;
+  }
   .votify-lobby {
     grid-template-columns: 1fr;
   }
   .votify-invite {
     display: inline-flex;
   }
+  .votify-card {
+    padding: 20px;
+  }
+  .votify-session-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .votify-session-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .votify-session-actions .votify-btn {
+    flex: 1 1 auto;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+  }
+  .votify-now-playing {
+    gap: 14px;
+    padding: 16px;
+  }
+  .votify-np-art {
+    width: 64px;
+    height: 64px;
+  }
+  .votify-np-title {
+    font-size: 1.02rem;
+  }
+  .votify-search-form {
+    flex-direction: column;
+  }
+  .votify-search .votify-search-form {
+    margin-right: 0;
+    margin-top: 6px;
+  }
+  .votify-tabs {
+    margin-right: 0;
+    padding-right: 40px;
+  }
   .votify-results {
     grid-template-columns: 1fr;
   }
+  .votify-playlists {
+    grid-template-columns: 1fr;
+  }
+  .votify-nominate-btn {
+    padding: 9px 16px;
+    font-size: 0.88rem;
+  }
+  .votify-noms .tracks-header,
+  .votify-ice .tracks-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .votify-nom {
     flex-wrap: wrap;
+    gap: 10px 12px;
+    padding: 12px;
+  }
+  .votify-pos {
+    width: 18px;
+  }
+  .votify-nom-art {
+    width: 44px;
+    height: 44px;
+  }
+  .votify-nom-info {
+    flex: 1;
+  }
+  .votify-vote {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    gap: 16px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  .votify-vote-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 1.05rem;
+  }
+  .votify-modal {
+    padding: 22px 20px 26px;
+  }
+  .votify-settings-form label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .votify-settings-form .votify-input {
+    flex: none;
+    width: 120px;
   }
 }

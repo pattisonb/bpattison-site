@@ -52,3 +52,30 @@ export async function addTrackToQueue(token, trackId) {
     params: { uri: `spotify:track:${trackId}` },
   });
 }
+
+// The logged-in user's playlists (first 50).
+export async function getMyPlaylists(token) {
+  const { data } = await axios.get(`${BASE}/me/playlists`, {
+    headers: authHeader(token),
+    params: { limit: 50 },
+  });
+  return (data.items || []).filter(Boolean);
+}
+
+// Tracks inside one playlist (first 100, skipping local files).
+export async function getPlaylistTracks(token, playlistId) {
+  const { data } = await axios.get(`${BASE}/playlists/${playlistId}/tracks`, {
+    headers: authHeader(token),
+    params: { limit: 100 },
+  });
+  return (data.items || []).map((i) => i.track).filter((t) => t && t.id);
+}
+
+// The user's liked songs, 50 at a time.
+export async function getSavedTracks(token, offset = 0) {
+  const { data } = await axios.get(`${BASE}/me/tracks`, {
+    headers: authHeader(token),
+    params: { limit: 50, offset },
+  });
+  return (data.items || []).map((i) => i.track).filter((t) => t && t.id);
+}

@@ -1,13 +1,13 @@
 .votify-page {
-  --votify: #4f46e5;
-  --votify-soft: rgba(79, 70, 229, 0.12);
+  --votify: var(--violet);
+  --votify-soft: rgba(124, 58, 237, 0.12);
   padding-bottom: 72px;
 }
 
 .votify-hero {
   background: linear-gradient(
     180deg,
-    rgba(79, 70, 229, 0.1) 0%,
+    rgba(124, 58, 237, 0.09) 0%,
     var(--bg) 100%
   );
   padding: 56px 0 36px;
@@ -21,9 +21,24 @@
   color: var(--votify);
 }
 
+.votify-title-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 10px 0 14px;
+}
+
+.votify-logo {
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+}
+
 .votify-hero h1 {
   font-size: clamp(2rem, 5vw, 3rem);
-  margin: 10px 0 14px;
+  margin: 0;
 }
 
 .votify-hero p {
@@ -407,7 +422,7 @@
 }
 
 .votify-nominate-btn:hover:not(:disabled) {
-  background: rgba(79, 70, 229, 0.2);
+  background: rgba(124, 58, 237, 0.2);
 }
 
 .votify-nominate-btn:disabled {
@@ -803,6 +818,14 @@
     padding: 40px 0 28px;
     margin-bottom: 28px;
   }
+  .votify-title-row {
+    gap: 14px;
+  }
+  .votify-logo {
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
+  }
   .votify-lobby {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -902,4 +925,146 @@
     flex: none;
     width: 120px;
   }
+}
+
+/* craigslist mode: the whole session reads like a listings page */
+[data-style="craigslist"] .votify-logo {
+  display: none;
+}
+
+[data-style="craigslist"] .votify-label {
+  color: #666;
+}
+
+[data-style="craigslist"] .votify-card,
+[data-style="craigslist"] .votify-now-playing,
+[data-style="craigslist"] .votify-members,
+[data-style="craigslist"] .votify-modal {
+  border: 1px solid #ccc;
+  background: #fff;
+  padding: 16px;
+}
+
+[data-style="craigslist"] .votify-btn {
+  background: #ececec;
+  color: #000;
+  border: 1px solid #999;
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+  padding: 6px 14px;
+}
+
+[data-style="craigslist"] .votify-btn:hover {
+  filter: none;
+  background: #e0e0e0;
+}
+
+[data-style="craigslist"] .votify-invite {
+  text-decoration: none;
+}
+
+[data-style="craigslist"] .votify-link-btn,
+[data-style="craigslist"] .votify-inline-link {
+  color: #0000ee;
+  text-decoration: underline;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-members-btn,
+[data-style="craigslist"] .votify-info-btn,
+[data-style="craigslist"] .votify-order-btn,
+[data-style="craigslist"] .votify-tab,
+[data-style="craigslist"] .votify-nominate-btn,
+[data-style="craigslist"] .votify-vote-btn {
+  background: #ececec;
+  color: #000;
+  border: 1px solid #999;
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+}
+
+[data-style="craigslist"] .votify-tab.active,
+[data-style="craigslist"] .votify-order-btn.active {
+  background: #fff;
+  border-color: #000;
+  font-weight: 700;
+}
+
+[data-style="craigslist"] .votify-members-btn:hover,
+[data-style="craigslist"] .votify-members-btn.active,
+[data-style="craigslist"] .votify-info-btn:hover,
+[data-style="craigslist"] .votify-tab:hover {
+  color: #000;
+  border-color: #000;
+}
+
+[data-style="craigslist"] .votify-input {
+  background: #fff;
+  border: 1px solid #999;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-code {
+  color: #090;
+}
+
+[data-style="craigslist"] .votify-nom,
+[data-style="craigslist"] .votify-result,
+[data-style="craigslist"] .votify-playlist {
+  border: 1px solid #ddd;
+  background: #fff;
+}
+
+[data-style="craigslist"] .votify-nom-title,
+[data-style="craigslist"] .votify-result-title,
+[data-style="craigslist"] .votify-playlist-name {
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+  color: #0000ee;
+  text-decoration: underline;
+}
+
+[data-style="craigslist"] .votify-score {
+  color: #090;
+}
+
+[data-style="craigslist"] .votify-np-status {
+  color: #666;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+[data-style="craigslist"] .votify-np-title {
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 700;
+}
+
+[data-style="craigslist"] .votify-host-tag {
+  background: none;
+  color: #666;
+  padding: 0;
+}
+
+[data-style="craigslist"] .votify-host-tag::before {
+  content: "(";
+}
+
+[data-style="craigslist"] .votify-host-tag::after {
+  content: ")";
+}
+
+[data-style="craigslist"] .votify-modal h3 {
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-pos {
+  color: #666;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-error {
+  background: #fff;
+  border: 1px solid #999;
+  color: #000;
 }

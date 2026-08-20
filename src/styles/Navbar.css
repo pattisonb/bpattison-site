@@ -59,6 +59,7 @@
 }
 
 .nav-link {
+  --nav-accent: var(--brand);
   position: relative;
   color: var(--text-soft);
   font-weight: 500;
@@ -69,13 +70,13 @@
 }
 
 .nav-link:hover {
-  color: var(--text);
-  background: var(--bg-alt);
+  color: var(--nav-accent);
+  background: color-mix(in srgb, var(--nav-accent) 10%, transparent);
 }
 
 .nav-link.active {
-  color: var(--brand);
-  background: var(--brand-soft);
+  color: var(--nav-accent);
+  background: color-mix(in srgb, var(--nav-accent) 13%, transparent);
 }
 
 .nav-socials {

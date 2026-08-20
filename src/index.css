@@ -21,6 +21,7 @@
 
   --spotify: #1db954;
   --gold: #f59e0b;
+  --teal: #0d9488;
 
   --nav-bg: rgba(255, 255, 255, 0.8);
 
@@ -59,6 +60,7 @@
   --text-muted: #64748b;
 
   --spotify: #1ed760;
+  --teal: #2dd4bf;
 
   --nav-bg: rgba(11, 17, 32, 0.78);
 
@@ -89,6 +91,7 @@
 
   --spotify: #0000ee;
   --gold: #551a8b;
+  --teal: #0000ee;
 
   --nav-bg: #ffffff;
 
@@ -137,10 +140,15 @@
 [data-style="craigslist"] .hero,
 [data-style="craigslist"] .projects-hero,
 [data-style="craigslist"] .spotify-hero,
+[data-style="craigslist"] .votify-hero,
 [data-style="craigslist"] .tictactoe-hero {
   background: var(--bg);
   padding-top: 28px;
   padding-bottom: 20px;
+}
+
+[data-style="craigslist"] .votify-hero h1 {
+  font-size: 1.7rem;
 }
 
 [data-style="craigslist"] .hero-glow {
@@ -161,9 +169,99 @@
   font-weight: 700;
 }
 
-[data-style="craigslist"] .nav-link,
+[data-style="craigslist"] .nav {
+  border-bottom: 1px solid #ccc;
+}
+
+[data-style="craigslist"] .nav-link {
+  text-decoration: none;
+  text-transform: lowercase;
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+  font-size: 0.95rem;
+  color: #0000ee;
+  padding: 2px 12px;
+}
+
+[data-style="craigslist"] .nav-link + .nav-link {
+  border-left: 1px solid #ccc;
+}
+
+[data-style="craigslist"] .nav-link:hover {
+  color: #0000ee;
+  background: none;
+  text-decoration: underline;
+}
+
+[data-style="craigslist"] .nav-link.active {
+  color: #551a8b;
+  background: none;
+  font-weight: 700;
+}
+
 [data-style="craigslist"] .nav-socials a {
   text-decoration: none;
+  color: #0000ee;
+}
+
+[data-style="craigslist"] .nav-socials a:hover,
+[data-style="craigslist"] .theme-toggle:hover {
+  background: none;
+  color: #551a8b;
+}
+
+[data-style="craigslist"] .section-label {
+  color: #666;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .tag {
+  background: none;
+  color: #666;
+  padding: 0;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+[data-style="craigslist"] .tag::before {
+  content: "[";
+}
+
+[data-style="craigslist"] .tag::after {
+  content: "]";
+}
+
+[data-style="craigslist"] .site-footer {
+  background: #fff;
+  border-top: 1px solid #ccc;
+  padding: 18px 0 26px;
+}
+
+[data-style="craigslist"] .site-footer .container {
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+[data-style="craigslist"] .site-footer p {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.85rem;
+  color: #333;
+}
+
+[data-style="craigslist"] .footer-links {
+  gap: 14px;
+}
+
+[data-style="craigslist"] .footer-links a {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #0000ee;
+  text-decoration: underline;
+  text-transform: lowercase;
 }
 
 [data-style="craigslist"] .btn {

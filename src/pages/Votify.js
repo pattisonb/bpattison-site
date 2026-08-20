@@ -24,6 +24,7 @@ import {
   arrayRemove,
 } from "firebase/firestore";
 import { votifyDb } from "../utils/votifyFirebase";
+import VotifyLogo from "../assets/VotifyLogo.svg";
 import {
   searchTracks,
   getUser,
@@ -1049,7 +1050,10 @@ function Votify() {
           <span className="section-label votify-label">
             <FaVoteYea /> Votify
           </span>
-          <h1>Vote on what plays next</h1>
+          <div className="votify-title-row">
+            <img src={VotifyLogo} alt="Votify logo" className="votify-logo" />
+            <h1>Vote on what plays next</h1>
+          </div>
           <p>
             Host a session, share the code, and let the room pick the music.
             The host logs in with Spotify; everyone else just joins with a name

@@ -1,6 +1,10 @@
 .projects-hero {
-  background: linear-gradient(180deg, var(--brand-soft) 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, rgba(13, 148, 136, 0.08) 0%, var(--bg) 100%);
   padding: 64px 0 40px;
+}
+
+.projects-hero .section-label {
+  color: var(--teal);
 }
 
 .projects-hero h1 {

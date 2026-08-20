@@ -49,7 +49,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 18px;
-  color: var(--brand);
+  color: var(--teal);
   font-weight: 600;
   font-size: 0.92rem;
 }
@@ -61,4 +61,64 @@
 .project-link svg {
   transition: transform 0.2s ease;
   font-size: 0.85rem;
+}
+
+/* craigslist mode: project cards become little gallery listings */
+[data-style="craigslist"] .project-card {
+  position: relative;
+  border: 1px solid #ddd;
+  background: #fff;
+  padding: 32px 12px 12px;
+  text-decoration: none;
+}
+
+[data-style="craigslist"] .project-card::before {
+  content: "$0";
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  color: #090;
+  font-weight: 700;
+  font-size: 1rem;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .project-card::after {
+  content: "\2606  posted today \00b7 brian's stuff";
+  display: block;
+  margin-top: 10px;
+  color: #666;
+  font-size: 0.8rem;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .project-card-top {
+  margin-bottom: 6px;
+}
+
+[data-style="craigslist"] .project-icon {
+  background: #ececec !important;
+  color: #333 !important;
+  border: 1px solid #ccc;
+}
+
+[data-style="craigslist"] .project-title {
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+  font-size: 1.02rem;
+  color: #0000ee;
+  text-decoration: underline;
+}
+
+[data-style="craigslist"] .project-blurb {
+  color: #333;
+  font-size: 0.88rem;
+}
+
+[data-style="craigslist"] .project-link {
+  color: #0000ee;
+  text-decoration: underline;
+  font-weight: 400;
+  font-family: 'Times New Roman', Times, serif;
+  text-transform: lowercase;
 }

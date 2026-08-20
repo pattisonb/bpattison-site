@@ -11,12 +11,13 @@ import {
 } from "react-icons/fa";
 import "../styles/Navbar.css";
 
+// each link highlights in the accent color of the page it leads to
 const navLinks = [
-  { label: "Home", to: "/" },
-  { label: "Projects", to: "/projects" },
-  { label: "Music", to: "/projects/spotify" },
-  { label: "Votify", to: "/projects/votify" },
-  { label: "Tic Tac Toe", to: "/projects/tictactoe" },
+  { label: "Home", to: "/", accent: "var(--brand)" },
+  { label: "Projects", to: "/projects", accent: "var(--teal)" },
+  { label: "Music", to: "/projects/spotify", accent: "var(--spotify)" },
+  { label: "Votify", to: "/projects/votify", accent: "var(--violet)" },
+  { label: "Tic Tac Toe", to: "/projects/tictactoe", accent: "var(--gold)" },
 ];
 
 const getInitialTheme = () => {
@@ -95,6 +96,7 @@ const Navbar = () => {
               key={link.to}
               to={link.to}
               end
+              style={{ "--nav-accent": link.accent }}
               className={({ isActive }) =>
                 "nav-link" + (isActive ? " active" : "")
               }

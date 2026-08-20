@@ -126,3 +126,39 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* craigslist mode: plain page, blue links, no ornament */
+[data-style="craigslist"] .hero-inner {
+  max-width: var(--maxw);
+}
+
+[data-style="craigslist"] .hero-subtitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+[data-style="craigslist"] .hero-text {
+  font-size: 0.95rem;
+  color: #333;
+}
+
+[data-style="craigslist"] .hero-links a {
+  width: auto;
+  height: auto;
+  background: none;
+  border: none;
+  color: #0000ee;
+  font-size: 1rem;
+  padding: 2px 4px;
+}
+
+[data-style="craigslist"] .hero-links a:hover {
+  color: #551a8b;
+}
+
+[data-style="craigslist"] .view-all {
+  color: #0000ee;
+  text-decoration: underline;
+  font-weight: 400;
+  font-family: 'Times New Roman', Times, serif;
+}

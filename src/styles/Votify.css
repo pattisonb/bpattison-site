@@ -44,6 +44,7 @@
 
 /* Shared card + button styles */
 .votify-card {
+  min-width: 0; /* never let intrinsic input widths stretch a card off screen */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -140,7 +141,7 @@
 /* Lobby */
 .votify-lobby {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
 }
@@ -344,11 +345,12 @@
 
 .votify-results {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 12px;
 }
 
 .votify-result {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -741,11 +743,12 @@
 
 .votify-playlists {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
   gap: 12px;
 }
 
 .votify-playlist {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -801,7 +804,7 @@
     margin-bottom: 28px;
   }
   .votify-lobby {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .votify-invite {
     display: inline-flex;
@@ -846,10 +849,10 @@
     padding-right: 40px;
   }
   .votify-results {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .votify-playlists {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .votify-nominate-btn {
     padding: 9px 16px;

@@ -6,6 +6,8 @@ import {
   FaTimes,
   FaPlus,
   FaSearch,
+  FaInfoCircle,
+  FaCommentDots,
 } from "react-icons/fa";
 import {
   collection,
@@ -271,6 +273,7 @@ function Votify() {
   const [orderMode, setOrderMode] = useState("added"); // "added" | "votes"
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [searchKey, setSearchKey] = useState("");
   const [results, setResults] = useState([]);
 
@@ -294,6 +297,16 @@ function Votify() {
     orderModeRef.current = orderMode;
   }, [orderMode]);
 
+  // let escape close the how-it-works popup
+  useEffect(() => {
+    if (!showInfo) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setShowInfo(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showInfo]);
+
   // The token used for read-only Spotify calls (search / track lookup): the
   // host uses their own; guests borrow the host's from the session doc.
   const apiToken = role === "host" ? token : hostToken;
@@ -308,7 +321,16 @@ function Votify() {
   useEffect(() => {
     let active = true;
     const init = async () => {
-      const code = new URLSearchParams(window.location.search).get("code");
+      const params = new URLSearchParams(window.location.search);
+
+      // arrived through an invite link: prefill the session code
+      const invited = params.get("join");
+      if (invited && active) {
+        setSessionIdInput(invited);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+
+      const code = params.get("code");
       if (code) {
         try {
           const data = await exchangeCodeForToken(code);
@@ -790,6 +812,13 @@ function Votify() {
   );
   const thinIceTracks = nominatedTracks.filter((t) => trackScore(t) <= 0);
 
+  // prefilled text message invite; the button only shows on small screens
+  const inviteLink = () => {
+    const url = `${window.location.origin}/projects/votify?join=${sessionID}`;
+    const msg = `Help pick what plays next! Join my Votify room with code ${sessionID}: ${url}`;
+    return `sms:?&body=${encodeURIComponent(msg)}`;
+  };
+
   return (
     <div className="votify-page">
       <section className="votify-hero">
@@ -803,6 +832,9 @@ function Votify() {
             The host logs in with Spotify; everyone else just joins with a name
             and votes.
           </p>
+          <button className="votify-info-btn" onClick={() => setShowInfo(true)}>
+            <FaInfoCircle /> How it works
+          </button>
         </div>
       </section>
 
@@ -888,6 +920,9 @@ function Votify() {
                 </h2>
               </div>
               <div className="votify-session-actions">
+                <a className="votify-btn votify-invite" href={inviteLink()}>
+                  <FaCommentDots /> Invite by text
+                </a>
                 <button
                   className="votify-btn"
                   onClick={() => setSearchOpen((v) => !v)}
@@ -1038,6 +1073,58 @@ function Votify() {
           if you want to see where it came from.
         </p>
       </div>
+
+      {showInfo && (
+        <div className="votify-modal-overlay" onClick={() => setShowInfo(false)}>
+          <div
+            className="votify-modal"
+            role="dialog"
+            aria-label="How Votify works"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="votify-dismiss"
+              onClick={() => setShowInfo(false)}
+              aria-label="Close"
+            >
+              <FaTimes />
+            </button>
+            <h2>How Votify works</h2>
+            <h3>One person hosts</h3>
+            <p>
+              The host logs in with Spotify, starts a session, and shares the
+              code. Music plays from their Spotify like normal, so hosting
+              needs Premium. Everyone else just enters the code and a name.
+            </p>
+            <h3>Nominate anything</h3>
+            <p>
+              Search for a song and nominate it. It jumps straight into the
+              queue with your upvote attached.
+            </p>
+            <h3>Vote it up or down</h3>
+            <p>
+              One vote per person per song, and you can change your mind any
+              time. The host picks whether the queue runs first come first
+              served or by most votes.
+            </p>
+            <h3>Thin ice</h3>
+            <p>
+              A song that drops to zero or below lands on thin ice with five
+              minutes on the clock, and every fresh downvote cuts a minute
+              off. Climb back above zero and it rejoins the queue. If time
+              runs out, a negative song is gone for good; a song sitting at
+              exactly zero only plays if nothing else is waiting.
+            </p>
+            <h3>The handoff</h3>
+            <p>
+              As the current song winds down, whatever is on top of the queue
+              gets sent to the host's Spotify, and the room starts voting on
+              the next slot.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
 const TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token";
 const CLIENT_ID = "fbd29f2d306b49389413797452ded225";
 const SCOPE =
-  "user-read-playback-state user-read-currently-playing user-modify-playback-state user-library-read playlist-read-private";
+  "user-read-playback-state user-read-currently-playing user-modify-playback-state user-library-read user-library-modify playlist-read-private playlist-modify-private playlist-modify-public";
 const VERIFIER_KEY = "votify_verifier";
 
 // Must match a Redirect URI registered on the Spotify app exactly. Derived from

@@ -927,6 +927,119 @@
   }
 }
 
+/* Locked in + played tonight + QR */
+.votify-locked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(22, 163, 74, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.4);
+  color: #15803d;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 28px;
+  font-size: 0.95rem;
+  animation: votify-locked-in 0.35s ease;
+}
+
+@keyframes votify-locked-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.votify-played {
+  margin-top: 40px;
+}
+
+.votify-played-list {
+  list-style: none;
+  counter-reset: played;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.votify-played-list li {
+  counter-increment: played;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.votify-played-list li::before {
+  content: counter(played);
+  width: 20px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.votify-played-list img {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.votify-played-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.votify-played-artist {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: auto;
+  flex-shrink: 1;
+}
+
+.votify-save {
+  margin-top: 18px;
+}
+
+.votify-save .votify-note a {
+  color: var(--votify);
+  text-decoration: underline;
+}
+
+.votify-qr {
+  max-width: 420px;
+  text-align: center;
+}
+
+.votify-qr img {
+  width: 100%;
+  max-width: 320px;
+  margin: 14px auto 10px;
+  border-radius: var(--radius-sm);
+}
+
+.votify-qr p {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
 /* craigslist mode: the whole session reads like a listings page */
 [data-style="craigslist"] .votify-logo {
   display: none;
@@ -1067,4 +1180,72 @@
   background: #fff;
   border: 1px solid #999;
   color: #000;
+}
+
+[data-style="craigslist"] .votify-locked {
+  background: #fff;
+  border: 1px solid #090;
+  color: #090;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-played-list li {
+  background: #fff;
+  border: 1px solid #ddd;
+}
+
+[data-style="craigslist"] .votify-played-name {
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+  color: #0000ee;
+  text-decoration: underline;
+}
+
+[data-style="craigslist"] .votify-qr img {
+  border: 1px solid #ccc;
+}
+
+/* actions on the current song, for people logged into Spotify */
+.votify-np-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.votify-np-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.votify-np-btn:hover {
+  border-color: var(--spotify);
+  color: var(--spotify);
+}
+
+.votify-np-btn.liked {
+  color: var(--spotify);
+  border-color: var(--spotify);
+  background: rgba(29, 185, 84, 0.1);
+}
+
+[data-style="craigslist"] .votify-np-btn {
+  background: #ececec;
+  border: 1px solid #999;
+  color: #333;
+}
+
+[data-style="craigslist"] .votify-np-btn.liked {
+  color: #090;
+  border-color: #090;
+  background: #fff;
 }

@@ -11,13 +11,19 @@ import {
   FaCog,
   FaUsers,
   FaArrowLeft,
+  FaLock,
+  FaQrcode,
+  FaHeart,
+  FaRegHeart,
 } from "react-icons/fa";
+import QRCode from "qrcode";
 import {
   collection,
   onSnapshot,
   doc,
   setDoc,
   getDoc,
+  getDocs,
   updateDoc,
   deleteDoc,
   arrayUnion,
@@ -34,6 +40,11 @@ import {
   getMyPlaylists,
   getPlaylistTracks,
   getSavedTracks,
+  createPlaylist,
+  addTracksToPlaylist,
+  checkSavedTracks,
+  saveTrack,
+  removeSavedTrack,
 } from "../utils/votifySpotify";
 import {
   beginLogin,
@@ -51,7 +62,11 @@ const DEFAULT_SETTINGS = {
   penaltySeconds: 60, // how much time each downvote on the ice costs
   rescueScore: 1, // the score that pulls a song off the ice
   killScore: -3, // the score that removes a song on the spot
+  trashCooldownMin: 30, // how long a trashed song stays unnominatable
 };
+
+// sessions this browser has hosted, so starting a new one can tidy up old ones
+const MY_SESSIONS_KEY = "votify_my_sessions";
 
 const LS = {
   token: "votify_token",
@@ -139,7 +154,7 @@ function Artists({ artists }) {
   );
 }
 
-function NowPlaying({ track, endsAt }) {
+function NowPlaying({ track, endsAt, canAct, liked, onLike, onAddTo }) {
   const albumImage = track.album?.images?.[0]?.url;
 
   const [secondsLeft, setSecondsLeft] = useState(null);
@@ -176,6 +191,28 @@ function NowPlaying({ track, endsAt }) {
           </span>
         )}
       </div>
+      {canAct && (
+        <div className="votify-np-actions">
+          <button
+            className={`votify-np-btn${liked ? " liked" : ""}`}
+            onClick={onLike}
+            aria-label={
+              liked ? "Remove from your Liked Songs" : "Save to your Liked Songs"
+            }
+            title={liked ? "In your Liked Songs" : "Save to your Liked Songs"}
+          >
+            {liked ? <FaHeart /> : <FaRegHeart />}
+          </button>
+          <button
+            className="votify-np-btn"
+            onClick={onAddTo}
+            aria-label="Add to one of your playlists"
+            title="Add to one of your playlists"
+          >
+            <FaPlus />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -286,11 +323,19 @@ function Votify() {
   const [orderMode, setOrderMode] = useState("added"); // "added" | "votes"
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [members, setMembers] = useState([]);
+  const [playedTracks, setPlayedTracks] = useState([]);
+  const [lockedIn, setLockedIn] = useState(null); // song name flashed when dispatched
+  const [saveState, setSaveState] = useState({ status: "idle", url: "" });
+  const [npLiked, setNpLiked] = useState(null); // is now playing in my liked songs
+  const [showAddTo, setShowAddTo] = useState(false);
+  const [addedTo, setAddedTo] = useState(""); // playlist that just got the song
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [qrData, setQrData] = useState("");
   const [draft, setDraft] = useState(null); // settings form values while editing
   const [searchKey, setSearchKey] = useState("");
   const [results, setResults] = useState([]);
@@ -316,6 +361,8 @@ function Votify() {
   const orderModeRef = useRef("added");
   const settingsRef = useRef(DEFAULT_SETTINGS);
   const detailsCache = useRef(new Map());
+  const lastLockedAt = useRef(0);
+  const lockedTimer = useRef(null);
 
   useEffect(() => {
     tracksRef.current = nominatedTracks;
@@ -331,16 +378,25 @@ function Votify() {
 
   // let escape close the popups
   useEffect(() => {
-    if (!showInfo && !showSettings) return;
+    if (!showInfo && !showSettings && !showQr && !showAddTo) return;
     const onKey = (e) => {
       if (e.key === "Escape") {
         setShowInfo(false);
         setShowSettings(false);
+        setShowQr(false);
+        setShowAddTo(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showInfo, showSettings]);
+  }, [showInfo, showSettings, showQr, showAddTo]);
+
+  // flash the locked-in banner for a few seconds
+  const showLocked = (name) => {
+    setLockedIn(name || "the top song");
+    if (lockedTimer.current) clearTimeout(lockedTimer.current);
+    lockedTimer.current = setTimeout(() => setLockedIn(null), 8000);
+  };
 
   // The token used for read-only Spotify calls (search / track lookup): anyone
   // logged into Spotify uses their own (so results match their account);
@@ -546,6 +602,42 @@ function Votify() {
   const memberDoc = (sid) =>
     doc(votifyDb, `${sid}:data`, `member_${voterId}`);
 
+  // 4c. Tonight's setlist: every song the room has locked in so far.
+  useEffect(() => {
+    if (!sessionID) {
+      setPlayedTracks([]);
+      return undefined;
+    }
+    const ref = collection(votifyDb, `${sessionID}:played`);
+    const unsubscribe = onSnapshot(ref, (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (a.at?.seconds || 0) - (b.at?.seconds || 0));
+      setPlayedTracks(list);
+    });
+    return () => unsubscribe();
+  }, [sessionID]);
+
+  const npId = nowPlaying ? nowPlaying.id : "";
+
+  // 4d. For logged-in listeners: is the current song already liked?
+  useEffect(() => {
+    if (!token || !npId) {
+      setNpLiked(null);
+      return undefined;
+    }
+    let active = true;
+    checkSavedTracks(token, [npId])
+      .then((res) => {
+        if (active) setNpLiked(!!res[0]);
+      })
+      .catch(() => {
+        if (active) setNpLiked(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, npId]);
+
   // 5. The session heartbeat. The host publishes playback, a borrow token, and
   //    the order mode; hands the next song to Spotify just before the current
   //    one ends; and enforces the thin ice timers. Guests read everything.
@@ -608,6 +700,33 @@ function Votify() {
             return snap.exists() ? snap.data() : null;
           };
 
+          // trashed songs go in the graveyard so they can't come right back
+          const buryTrack = (id) =>
+            setDoc(
+              dataRef,
+              { graveyard: { [id]: new Date() } },
+              { merge: true }
+            ).catch(() => {});
+
+          // note a song the room locked in, for the banner and the recap
+          const logLocked = async (t) => {
+            const stamp = new Date();
+            setDoc(doc(votifyDb, `${sessionID}:played`, `${stamp.getTime()}_${t.id}`), {
+              trackID: t.id,
+              name: t.name || "",
+              artist: (t.artists || []).map((a) => a.name).join(", "),
+              image: t.album?.images?.[0]?.url || "",
+              at: stamp,
+            }).catch(() => {});
+            setDoc(
+              dataRef,
+              { lastLocked: { name: t.name || "", at: stamp } },
+              { merge: true }
+            ).catch(() => {});
+            lastLockedAt.current = stamp.getTime();
+            if (!cancelled) showLocked(t.name);
+          };
+
           // the host is the referee: songs at or below the kill score go
           // immediately, songs at zero get stamped onto thin ice, and songs
           // that reach the rescue score get their stamp (and penalties) back
@@ -617,6 +736,7 @@ function Votify() {
               const fresh = await freshRead(t.id);
               if (fresh && trackScore(fresh) <= rules.killScore) {
                 await deleteDoc(trackDoc(t.id));
+                buryTrack(t.id);
               }
               continue;
             }
@@ -655,8 +775,12 @@ function Votify() {
               } catch (e) {
                 continue; // no active player yet, try again next tick
               }
+              await deleteDoc(trackDoc(t.id));
+              logLocked(t);
+              continue;
             }
             await deleteDoc(trackDoc(t.id));
+            buryTrack(t.id);
           }
 
           // hand the next queued song to Spotify right before this one ends
@@ -678,6 +802,7 @@ function Votify() {
               try {
                 await addTrackToQueue(token, next.id);
                 await deleteDoc(trackDoc(next.id));
+                logLocked(next);
               } catch (e) {
                 dispatchedFor.current = null;
                 console.error("Dispatch failed:", e);
@@ -717,6 +842,18 @@ function Votify() {
           ) {
             setSettings(rules);
           }
+          const locked = data.lastLocked;
+          if (locked && locked.at && !cancelled) {
+            const ms =
+              typeof locked.at.toDate === "function"
+                ? locked.at.toDate().getTime()
+                : 0;
+            // only flash fresh dispatches, and each one only once
+            if (ms > lastLockedAt.current && Date.now() - ms < 20000) {
+              lastLockedAt.current = ms;
+              showLocked(locked.name);
+            }
+          }
         }
       } catch (e) {
         // transient network/playback errors are fine to skip
@@ -748,6 +885,26 @@ function Votify() {
     Object.values(LS).forEach(clearLS);
   };
 
+  // wipe one of my finished sessions so old rooms don't pile up in Firestore
+  const cleanupSession = async (oldId) => {
+    try {
+      const snap = await getDoc(doc(votifyDb, `${oldId}:data`, oldId));
+      if (
+        snap.exists() &&
+        snap.data().leaderId &&
+        snap.data().leaderId !== spotifyId
+      ) {
+        return; // somehow not mine, leave it alone
+      }
+      for (const path of [`${oldId}:tracks`, `${oldId}:played`, `${oldId}:data`]) {
+        const docs = await getDocs(collection(votifyDb, path));
+        for (const d of docs.docs) {
+          await deleteDoc(doc(votifyDb, path, d.id));
+        }
+      }
+    } catch (e) {}
+  };
+
   const handleStartSession = async () => {
     if (!token || !user) return;
     try {
@@ -761,6 +918,15 @@ function Votify() {
         settings: DEFAULT_SETTINGS,
       });
       await setDoc(memberDoc(id), { name: user, host: true });
+
+      // tidy up whatever rooms this browser hosted before
+      let previous = [];
+      try {
+        previous = JSON.parse(readLS(MY_SESSIONS_KEY) || "[]");
+      } catch (e) {}
+      previous.filter((old) => old !== id).forEach((old) => cleanupSession(old));
+      writeLS(MY_SESSIONS_KEY, JSON.stringify([id]));
+
       setRole("host");
       setSessionID(id);
       setSessionLeader(user);
@@ -857,6 +1023,12 @@ function Votify() {
     setRole("");
     setShowMembers(false);
     setShowSettings(false);
+    setShowQr(false);
+    setShowAddTo(false);
+    setNpLiked(null);
+    setLockedIn(null);
+    setSaveState({ status: "idle", url: "" });
+    lastLockedAt.current = 0;
     setNomTab("search");
     setPlaylists(null);
     setActivePlaylist(null);
@@ -893,6 +1065,30 @@ function Votify() {
   // nominating counts as your upvote, so a new song goes straight to the queue
   const handleNominate = async (track) => {
     try {
+      // recently trashed songs wait out the room's cooldown first
+      const cooldownMs = (settingsRef.current.trashCooldownMin || 0) * 60000;
+      if (cooldownMs > 0) {
+        const snap = await getDoc(
+          doc(votifyDb, `${sessionID}:data`, sessionID)
+        );
+        const buried = snap.exists()
+          ? (snap.data().graveyard || {})[track.id]
+          : null;
+        if (buried) {
+          const ms =
+            typeof buried.toDate === "function"
+              ? buried.toDate().getTime()
+              : 0;
+          if (Date.now() - ms < cooldownMs) {
+            const wait = Math.ceil((cooldownMs - (Date.now() - ms)) / 60000);
+            setError(
+              `The room already voted "${track.name}" off — it can come back in ${wait} min.`
+            );
+            return;
+          }
+        }
+      }
+      setError(null);
       await setDoc(doc(votifyDb, `${sessionID}:tracks`, track.id), {
         trackID: track.id,
         nominatedBy: user,
@@ -1011,6 +1207,55 @@ function Votify() {
     setLibNote(null);
   };
 
+  // a QR of the invite link, drawn locally so it works with no extra requests
+  const openQr = async () => {
+    try {
+      const url = `${window.location.origin}/projects/votify?join=${sessionID}`;
+      setQrData(await QRCode.toDataURL(url, { width: 480, margin: 1 }));
+      setShowQr(true);
+    } catch (e) {
+      console.error("QR failed:", e);
+    }
+  };
+
+  // turn tonight's setlist into a real playlist on the host's account
+  const handleSavePlaylist = async () => {
+    if (!token || !spotifyId || playedTracks.length === 0) return;
+    setSaveState({ status: "saving", url: "" });
+    try {
+      const date = new Date().toLocaleDateString(undefined, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+      const playlist = await createPlaylist(
+        token,
+        spotifyId,
+        `Votify — ${date}`,
+        `Everything the room voted onto the speakers in session ${sessionID}.`
+      );
+      await addTracksToPlaylist(
+        token,
+        playlist.id,
+        playedTracks.map((t) => t.trackID)
+      );
+      setSaveState({
+        status: "done",
+        url: playlist.external_urls?.spotify || "",
+      });
+    } catch (e) {
+      console.error("Playlist save failed:", e);
+      setSaveState({
+        status: "error",
+        url: "",
+        message:
+          e.response && e.response.status === 403
+            ? "Your Spotify login can't make playlists yet — log out and back in to grant it."
+            : "Couldn't save the playlist. Try again.",
+      });
+    }
+  };
+
   // the settings form edits a draft so a half-typed number never hits the room
   const openSettings = () => {
     setDraft({
@@ -1018,6 +1263,7 @@ function Votify() {
       penaltySeconds: String(settings.penaltySeconds),
       rescueScore: String(settings.rescueScore),
       killScore: String(settings.killScore),
+      trashCooldownMin: String(settings.trashCooldownMin),
     });
     setShowSettings(true);
   };
@@ -1033,6 +1279,7 @@ function Votify() {
       penaltySeconds: clamp(draft.penaltySeconds, 0, 600, 60),
       rescueScore: clamp(draft.rescueScore, 1, 10, 1),
       killScore: clamp(draft.killScore, -20, -1, -3),
+      trashCooldownMin: clamp(draft.trashCooldownMin, 0, 240, 30),
     };
     setSettings(next);
     setShowSettings(false);
@@ -1041,6 +1288,55 @@ function Votify() {
       { settings: next },
       { merge: true }
     ).catch((e) => console.error("Settings update failed:", e));
+  };
+
+  // logged-in listeners can act on the current song with their own account
+  const actError = (e, what) => {
+    if (e.response && e.response.status === 403) {
+      setError(
+        `Your Spotify login can't ${what} yet — log out and back in to grant it.`
+      );
+    } else {
+      setError(`Couldn't ${what}. Try again.`);
+    }
+  };
+
+  const toggleLikeNowPlaying = async () => {
+    if (!token || !npId) return;
+    try {
+      if (npLiked) {
+        await removeSavedTrack(token, npId);
+        setNpLiked(false);
+      } else {
+        await saveTrack(token, npId);
+        setNpLiked(true);
+      }
+      setError(null);
+    } catch (e) {
+      actError(e, "save songs");
+    }
+  };
+
+  const openAddTo = async () => {
+    if (!token || !npId) return;
+    try {
+      if (playlists === null) setPlaylists(await getMyPlaylists(token));
+      setAddedTo("");
+      setShowAddTo(true);
+      setError(null);
+    } catch (e) {
+      actError(e, "read your playlists");
+    }
+  };
+
+  const addNowPlayingTo = async (playlist) => {
+    try {
+      await addTracksToPlaylist(token, playlist.id, [npId]);
+      setAddedTo(playlist.id);
+    } catch (e) {
+      setShowAddTo(false);
+      actError(e, "add to that playlist");
+    }
   };
 
   return (
@@ -1166,6 +1462,14 @@ function Votify() {
                     <FaCog />
                   </button>
                 )}
+                <button
+                  className="votify-members-btn"
+                  onClick={openQr}
+                  title="Show a QR code to join"
+                  aria-label="Show a QR code to join"
+                >
+                  <FaQrcode />
+                </button>
                 <a className="votify-btn votify-invite" href={inviteLink()}>
                   <FaCommentDots /> Invite by text
                 </a>
@@ -1202,8 +1506,22 @@ function Votify() {
               </div>
             )}
 
+            {lockedIn && (
+              <div className="votify-locked">
+                <FaLock /> Locked in: <strong>{lockedIn}</strong> — the room
+                voted it onto the speakers
+              </div>
+            )}
+
             {nowPlaying && nowPlaying.album && (
-              <NowPlaying track={nowPlaying} endsAt={endsAt} />
+              <NowPlaying
+                track={nowPlaying}
+                endsAt={endsAt}
+                canAct={!!token}
+                liked={!!npLiked}
+                onLike={toggleLikeNowPlaying}
+                onAddTo={openAddTo}
+              />
             )}
 
             {searchOpen && (
@@ -1450,6 +1768,59 @@ function Votify() {
                 </div>
               </div>
             )}
+
+            {playedTracks.length > 0 && (
+              <div className="votify-played">
+                <div className="tracks-header">
+                  <h2>Played tonight</h2>
+                  <span className="votify-count">
+                    {playedTracks.length}{" "}
+                    {playedTracks.length === 1 ? "song" : "songs"} locked in
+                  </span>
+                </div>
+                <ol className="votify-played-list">
+                  {playedTracks.map((t) => (
+                    <li key={t.id}>
+                      {t.image && <img src={t.image} alt="" />}
+                      <span className="votify-played-name">{t.name}</span>
+                      <span className="votify-played-artist">{t.artist}</span>
+                    </li>
+                  ))}
+                </ol>
+                {role === "host" && (
+                  <div className="votify-save">
+                    {saveState.status === "done" ? (
+                      <p className="votify-note">
+                        Saved to your Spotify.{" "}
+                        {saveState.url && (
+                          <a
+                            href={saveState.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Open the playlist
+                          </a>
+                        )}
+                      </p>
+                    ) : (
+                      <button
+                        className="votify-btn"
+                        onClick={handleSavePlaylist}
+                        disabled={saveState.status === "saving"}
+                      >
+                        <FaSpotify />{" "}
+                        {saveState.status === "saving"
+                          ? "Saving…"
+                          : "Save tonight to a playlist"}
+                      </button>
+                    )}
+                    {saveState.status === "error" && (
+                      <p className="votify-note">{saveState.message}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1541,10 +1912,104 @@ function Votify() {
                   }
                 />
               </label>
+              <label>
+                Wait before a trashed song can return (minutes)
+                <input
+                  className="votify-input"
+                  type="number"
+                  min="0"
+                  max="240"
+                  value={draft.trashCooldownMin}
+                  onChange={(e) =>
+                    setDraft({ ...draft, trashCooldownMin: e.target.value })
+                  }
+                />
+              </label>
               <button className="votify-btn" onClick={saveSettings}>
                 Save settings
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showQr && (
+        <div className="votify-modal-overlay" onClick={() => setShowQr(false)}>
+          <div
+            className="votify-modal votify-qr"
+            role="dialog"
+            aria-label="QR code to join this session"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="votify-dismiss"
+              onClick={() => setShowQr(false)}
+              aria-label="Close"
+            >
+              <FaTimes />
+            </button>
+            <h2>Scan to join</h2>
+            {qrData && (
+              <img src={qrData} alt={`QR code for session ${sessionID}`} />
+            )}
+            <p>
+              Point a phone camera here, or enter code{" "}
+              <span className="votify-code">{sessionID}</span> on this page.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showAddTo && (
+        <div
+          className="votify-modal-overlay"
+          onClick={() => setShowAddTo(false)}
+        >
+          <div
+            className="votify-modal"
+            role="dialog"
+            aria-label="Add the current song to one of your playlists"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="votify-dismiss"
+              onClick={() => setShowAddTo(false)}
+              aria-label="Close"
+            >
+              <FaTimes />
+            </button>
+            <h2>Add to one of your playlists</h2>
+            <p>{nowPlaying ? nowPlaying.name : ""}</p>
+            <div className="votify-playlists">
+              {(playlists || [])
+                .filter(
+                  (p) =>
+                    !p.owner || p.owner.id === spotifyId || p.collaborative
+                )
+                .map((playlist) => (
+                  <button
+                    key={playlist.id}
+                    className="votify-playlist"
+                    onClick={() => addNowPlayingTo(playlist)}
+                    disabled={addedTo === playlist.id}
+                  >
+                    {playlist.images?.[0]?.url && (
+                      <img src={playlist.images[0].url} alt={playlist.name} />
+                    )}
+                    <span className="votify-playlist-name">
+                      {playlist.name}
+                    </span>
+                    <span className="votify-playlist-count">
+                      {addedTo === playlist.id ? "Added" : <FaPlus />}
+                    </span>
+                  </button>
+                ))}
+            </div>
+            {playlists && playlists.length === 0 && (
+              <p className="votify-note">No playlists found.</p>
+            )}
           </div>
         </div>
       )}

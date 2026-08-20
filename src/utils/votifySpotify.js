@@ -71,6 +71,49 @@ export async function getPlaylistTracks(token, playlistId) {
   return (data.items || []).map((i) => i.track).filter((t) => t && t.id);
 }
 
+// Whether each track is already in the user's liked songs.
+export async function checkSavedTracks(token, trackIds) {
+  const { data } = await axios.get(`${BASE}/me/tracks/contains`, {
+    headers: authHeader(token),
+    params: { ids: trackIds.join(",") },
+  });
+  return data;
+}
+
+export async function saveTrack(token, trackId) {
+  await axios.put(`${BASE}/me/tracks`, { ids: [trackId] }, {
+    headers: authHeader(token),
+  });
+}
+
+export async function removeSavedTrack(token, trackId) {
+  await axios.delete(`${BASE}/me/tracks`, {
+    headers: authHeader(token),
+    data: { ids: [trackId] },
+  });
+}
+
+// Makes a new private playlist on the user's account.
+export async function createPlaylist(token, userId, name, description) {
+  const { data } = await axios.post(
+    `${BASE}/users/${userId}/playlists`,
+    { name, description, public: false },
+    { headers: authHeader(token) }
+  );
+  return data;
+}
+
+// Adds tracks to a playlist, 100 per request like the API allows.
+export async function addTracksToPlaylist(token, playlistId, trackIds) {
+  for (let i = 0; i < trackIds.length; i += 100) {
+    await axios.post(
+      `${BASE}/playlists/${playlistId}/tracks`,
+      { uris: trackIds.slice(i, i + 100).map((id) => `spotify:track:${id}`) },
+      { headers: authHeader(token) }
+    );
+  }
+}
+
 // The user's liked songs, 50 at a time.
 export async function getSavedTracks(token, offset = 0) {
   const { data } = await axios.get(`${BASE}/me/tracks`, {

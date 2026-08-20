@@ -68,6 +68,21 @@ const DEFAULT_SETTINGS = {
 // sessions this browser has hosted, so starting a new one can tidy up old ones
 const MY_SESSIONS_KEY = "votify_my_sessions";
 
+// heartbeat + presence timing: the referee stamps the session doc, everyone
+// stamps their member doc, and stale stamps mean someone stepped away
+const BEAT_EVERY_MS = 12000;
+const HOST_STALE_MS = 30000;
+const SEEN_EVERY_MS = 30000;
+const SEEN_STALE_MS = 90000;
+
+// firestore timestamps, raw dates, and strings all flatten to plain ms
+const tsMs = (value) => {
+  if (!value) return 0;
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
 const LS = {
   token: "votify_token",
   refresh: "votify_refresh",
@@ -191,6 +206,17 @@ function NowPlaying({ track, endsAt, canAct, liked, onLike, onAddTo }) {
           </span>
         )}
       </div>
+      {secondsLeft !== null && (track.duration_ms || 0) > 0 && (
+        <div
+          className="votify-np-bar"
+          style={{
+            width: `${Math.min(
+              100,
+              Math.max(0, 100 - (secondsLeft * 100000) / track.duration_ms)
+            )}%`,
+          }}
+        />
+      )}
       {canAct && (
         <div className="votify-np-actions">
           <button
@@ -273,7 +299,10 @@ function SessionTrack({ track, position, voter, onVote, purgatory, rules }) {
         <img src={albumImage} alt={track.name} className="votify-nom-art" />
       )}
       <div className="votify-nom-info">
-        <p className="votify-nom-title">{track.name}</p>
+        <p className="votify-nom-title">
+          {track.name}
+          {!canVote && <span className="votify-mine-tag">yours</span>}
+        </p>
         <p className="votify-nom-artist">
           <Artists artists={track.artists || []} />
         </p>
@@ -329,6 +358,11 @@ function Votify() {
   const [npLiked, setNpLiked] = useState(null); // is now playing in my liked songs
   const [showAddTo, setShowAddTo] = useState(false);
   const [addedTo, setAddedTo] = useState(""); // playlist that just got the song
+  const [toast, setToast] = useState(null); // transient bottom message
+  const [joining, setJoining] = useState(false);
+  const [invited, setInvited] = useState(false); // arrived via an invite link
+  const [hostAway, setHostAway] = useState(false); // referee heartbeat went stale
+  const [autopilot, setAutopilot] = useState(false); // a deputy is refereeing
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -363,10 +397,21 @@ function Votify() {
   const detailsCache = useRef(new Map());
   const lastLockedAt = useRef(0);
   const lockedTimer = useRef(null);
+  const toastTimer = useRef(null);
+  const lastBeatWrite = useRef(0);
+  const lastSeenWrite = useRef(0);
+  const membersRef = useRef([]);
+  const alertedIce = useRef(new Set());
+  const nameInputRef = useRef(null);
+  const missingRoom = useRef(0);
 
   useEffect(() => {
     tracksRef.current = nominatedTracks;
   }, [nominatedTracks]);
+
+  useEffect(() => {
+    membersRef.current = members;
+  }, [members]);
 
   useEffect(() => {
     orderModeRef.current = orderMode;
@@ -398,6 +443,20 @@ function Votify() {
     lockedTimer.current = setTimeout(() => setLockedIn(null), 8000);
   };
 
+  // small bottom toast for in-session feedback, where a banner at the top of
+  // the page would scroll right out of view on a phone
+  const notify = (message) => {
+    setToast(message);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4200);
+  };
+
+  const buzz = (pattern) => {
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch (e) {}
+  };
+
   // The token used for read-only Spotify calls (search / track lookup): anyone
   // logged into Spotify uses their own (so results match their account);
   // everyone else borrows the host's from the session doc.
@@ -416,9 +475,10 @@ function Votify() {
       const params = new URLSearchParams(window.location.search);
 
       // arrived through an invite link: prefill the session code
-      const invited = params.get("join");
-      if (invited && active) {
-        setSessionIdInput(invited);
+      const joinCode = params.get("join");
+      if (joinCode && active) {
+        setSessionIdInput(joinCode);
+        setInvited(true);
         window.history.replaceState(null, "", window.location.pathname);
       }
 
@@ -484,14 +544,19 @@ function Votify() {
         if (readLS(LS.role) === "host") {
           const sid = readLS(LS.sessionID);
           if (sid) {
-            setRole("host");
-            setSessionID(sid);
-            setSessionLeader(readLS(LS.leader) || name);
-            // pick the room's rules and order back up after a refresh
+            // only retake the seat if the room still exists — it may have
+            // been closed by a newer session on another device
             getDoc(doc(votifyDb, `${sid}:data`, sid))
               .then((snap) => {
-                if (!active || !snap.exists()) return;
+                if (!active) return;
+                if (!snap.exists()) {
+                  [LS.role, LS.sessionID, LS.leader].forEach(clearLS);
+                  return;
+                }
                 const room = snap.data();
+                setRole("host");
+                setSessionID(sid);
+                setSessionLeader(readLS(LS.leader) || name);
                 setOrderMode(room.orderMode || "added");
                 if (room.settings)
                   setSettings({ ...DEFAULT_SETTINGS, ...room.settings });
@@ -510,6 +575,37 @@ function Votify() {
       active = false;
     };
   }, [token]);
+
+  // 2b. Invite arrivals just need to type a name — put the cursor there.
+  useEffect(() => {
+    if (invited && !sessionID && nameInputRef.current) {
+      nameInputRef.current.focus();
+    }
+  }, [invited, sessionID]);
+
+  // 2c. Keep the host's screen awake so the room's referee never naps.
+  useEffect(() => {
+    if (role !== "host" || !sessionID) return undefined;
+    let lock = null;
+    let released = false;
+    const grab = async () => {
+      try {
+        if (navigator.wakeLock && !released) {
+          lock = await navigator.wakeLock.request("screen");
+        }
+      } catch (e) {} // battery saver can refuse; the deputy covers that
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") grab();
+    };
+    grab();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      released = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      if (lock) lock.release().catch(() => {});
+    };
+  }, [role, sessionID]);
 
   // 3. Refresh the host token shortly before it expires.
   useEffect(() => {
@@ -588,7 +684,13 @@ function Votify() {
       snapshot.docs.forEach((d) => {
         if (d.id === sessionID) return;
         const data = d.data();
-        if (data.name) list.push({ id: d.id, name: data.name, host: !!data.host });
+        if (data.name)
+          list.push({
+            id: d.id,
+            name: data.name,
+            host: !!data.host,
+            seen: tsMs(data.lastSeen),
+          });
       });
       list.sort(
         (a, b) =>
@@ -616,6 +718,26 @@ function Votify() {
     });
     return () => unsubscribe();
   }, [sessionID]);
+
+  // people whose tab actually pinged recently; docs without a stamp yet
+  // (someone mid-join) get the benefit of the doubt
+  const activeMembers = members.filter(
+    (m) => !m.seen || Date.now() - m.seen < SEEN_STALE_MS
+  );
+
+  // 4b2. A buzz and a nudge when one of my own songs lands on thin ice.
+  useEffect(() => {
+    for (const t of nominatedTracks) {
+      if (voterId !== (t.nominatedById || t.nominatedBy)) continue;
+      if (t.purgatoryAt && !alertedIce.current.has(t.id)) {
+        alertedIce.current.add(t.id);
+        notify(`"${t.name}" is on thin ice — go rally some votes!`);
+        buzz(200);
+      }
+      if (!t.purgatoryAt) alertedIce.current.delete(t.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nominatedTracks]);
 
   const npId = nowPlaying ? nowPlaying.id : "";
 
@@ -650,42 +772,160 @@ function Votify() {
 
     const tick = async () => {
       try {
+        // everyone: refresh my member doc so the room knows I'm still here
+        if (user && Date.now() - lastSeenWrite.current > SEEN_EVERY_MS) {
+          lastSeenWrite.current = Date.now();
+          setDoc(
+            memberDoc(sessionID),
+            { name: user, host: role === "host", lastSeen: new Date() },
+            { merge: true }
+          ).catch(() => {});
+        }
+
+        // figure out who referees this tick: the host normally, or the
+        // first active guest (on the borrowed token) if the host went quiet
+        let refereeToken = null;
+
         if (role === "host") {
           if (lastPublishedToken.current !== token) {
             lastPublishedToken.current = token;
             await setDoc(dataRef, { hostToken: token }, { merge: true });
           }
-
-          const playback = await getNowPlaying(token);
-          if (playback && playback.item) {
-            if (!cancelled) setNowPlaying(playback.item);
-            if (lastNowPlayingId.current !== playback.item.id) {
-              lastNowPlayingId.current = playback.item.id;
-              await setDoc(
-                dataRef,
-                { nowPlaying: playback.item.id },
-                { merge: true }
-              );
+          if (Date.now() - lastBeatWrite.current > BEAT_EVERY_MS) {
+            lastBeatWrite.current = Date.now();
+            try {
+              await updateDoc(dataRef, { hostBeat: new Date() });
+            } catch (e) {
+              // updateDoc refuses on a missing doc: the room was closed,
+              // probably by a newer session on another device
+              const still = await getDoc(dataRef);
+              if (!still.exists()) {
+                if (!cancelled) {
+                  leaveSeat();
+                  notify("This room was closed from another device.");
+                }
+                return;
+              }
+            }
+          }
+          refereeToken = token;
+        } else {
+          const snap = await getDoc(dataRef);
+          const data = snap.data();
+          if (!data) {
+            // a few misses in a row means the room is really gone
+            missingRoom.current += 1;
+            if (missingRoom.current >= 3 && !cancelled) {
+              leaveSeat();
+              notify("This room was closed by the host.");
+            }
+            return;
+          }
+          missingRoom.current = 0;
+          if (data.hostToken && data.hostToken !== hostToken && !cancelled) {
+            setHostToken(data.hostToken);
+          }
+          const borrow = data.hostToken || hostToken;
+          if (data.nowPlaying && borrow && lastNowPlayingId.current !== data.nowPlaying) {
+            try {
+              const details = await getTrack(borrow, data.nowPlaying);
+              if (!cancelled) {
+                setNowPlaying(details);
+                // only mark it handled once the lookup worked, so a failed
+                // fetch right after a refresh retries on the next tick
+                lastNowPlayingId.current = data.nowPlaying;
+              }
+            } catch (e) {
+              console.error("Now playing lookup failed:", e);
+            }
+          }
+          if (!cancelled) setEndsAt(data.endsAt || null);
+          const mode = data.orderMode || "added";
+          if (!cancelled && mode !== orderModeRef.current) {
+            setOrderMode(mode);
+          }
+          const rules = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+          if (
+            !cancelled &&
+            JSON.stringify(rules) !== JSON.stringify(settingsRef.current)
+          ) {
+            setSettings(rules);
+          }
+          const locked = data.lastLocked;
+          if (locked && locked.at && !cancelled) {
+            const ms = tsMs(locked.at);
+            // only flash fresh dispatches, and each one only once
+            if (ms > lastLockedAt.current && Date.now() - ms < 20000) {
+              lastLockedAt.current = ms;
+              showLocked(locked.name);
+              if (locked.by && locked.by === voterId) {
+                notify(`"${locked.name}" locked in — that was your pick!`);
+                buzz([100, 60, 100]);
+              }
             }
           }
 
-          // publish a rough song-end time so everyone can see roughly when
-          // the top of the queue locks in
-          let ends = 0;
-          if (playback && playback.item && playback.is_playing) {
-            ends =
-              Date.now() +
-              ((playback.item.duration_ms || 0) - (playback.progress_ms || 0));
+          // host heartbeat check: stale means the deputy steps up, and the
+          // deputy is simply the first active guest by member id — everyone
+          // computes the same answer without talking to each other
+          const beatMs = tsMs(data.hostBeat);
+          const hostStale = !beatMs || Date.now() - beatMs > HOST_STALE_MS;
+          const depMs = tsMs(data.deputyBeat);
+          const depFresh = depMs > 0 && Date.now() - depMs < HOST_STALE_MS;
+          let mine = false;
+          if (hostStale && borrow) {
+            const eligible = membersRef.current
+              .filter(
+                (m) =>
+                  !m.host && m.seen && Date.now() - m.seen < SEEN_STALE_MS
+              )
+              .map((m) => m.id)
+              .sort();
+            mine = eligible.length > 0 && eligible[0] === `member_${voterId}`;
           }
-          if (!cancelled) setEndsAt(ends || null);
-          if (
-            lastEndsAt.current === null ||
-            Math.abs(ends - lastEndsAt.current) > 3000
-          ) {
-            lastEndsAt.current = ends;
-            await setDoc(dataRef, { endsAt: ends }, { merge: true });
+          if (!cancelled) {
+            setHostAway(hostStale && !depFresh && !mine);
+            setAutopilot(hostStale && (mine || depFresh));
           }
+          if (mine) {
+            refereeToken = borrow;
+            if (Date.now() - lastBeatWrite.current > BEAT_EVERY_MS) {
+              lastBeatWrite.current = Date.now();
+              await setDoc(dataRef, { deputyBeat: new Date() }, { merge: true });
+            }
+          }
+        }
 
+        if (!refereeToken) return;
+
+        const playback = await getNowPlaying(refereeToken);
+        if (playback && playback.item) {
+          if (!cancelled) setNowPlaying(playback.item);
+          if (lastNowPlayingId.current !== playback.item.id) {
+            lastNowPlayingId.current = playback.item.id;
+            // update, never create: a closed room must stay closed
+            await updateDoc(dataRef, { nowPlaying: playback.item.id });
+          }
+        }
+
+        // publish a rough song-end time so everyone can see roughly when
+        // the top of the queue locks in
+        let ends = 0;
+        if (playback && playback.item && playback.is_playing) {
+          ends =
+            Date.now() +
+            ((playback.item.duration_ms || 0) - (playback.progress_ms || 0));
+        }
+        if (!cancelled) setEndsAt(ends || null);
+        if (
+          lastEndsAt.current === null ||
+          Math.abs(ends - lastEndsAt.current) > 3000
+        ) {
+          lastEndsAt.current = ends;
+          await updateDoc(dataRef, { endsAt: ends });
+        }
+
+        {
           const rules = settingsRef.current;
           const tracks = tracksRef.current;
           const queued = orderTracks(
@@ -701,12 +941,17 @@ function Votify() {
           };
 
           // trashed songs go in the graveyard so they can't come right back
-          const buryTrack = (id) =>
-            setDoc(
-              dataRef,
-              { graveyard: { [id]: new Date() } },
-              { merge: true }
-            ).catch(() => {});
+          const buryTrack = async (id) => {
+            try {
+              const room = await getDoc(dataRef);
+              if (!room.exists()) return; // closed room stays closed
+              await setDoc(
+                dataRef,
+                { graveyard: { [id]: new Date() } },
+                { merge: true }
+              );
+            } catch (e) {}
+          };
 
           // note a song the room locked in, for the banner and the recap
           const logLocked = async (t) => {
@@ -718,13 +963,21 @@ function Votify() {
               image: t.album?.images?.[0]?.url || "",
               at: stamp,
             }).catch(() => {});
-            setDoc(
-              dataRef,
-              { lastLocked: { name: t.name || "", at: stamp } },
-              { merge: true }
-            ).catch(() => {});
+            updateDoc(dataRef, {
+              lastLocked: {
+                name: t.name || "",
+                at: stamp,
+                by: t.nominatedById || "",
+              },
+            }).catch(() => {});
             lastLockedAt.current = stamp.getTime();
-            if (!cancelled) showLocked(t.name);
+            if (!cancelled) {
+              showLocked(t.name);
+              if ((t.nominatedById || t.nominatedBy) === voterId) {
+                notify(`"${t.name}" locked in — that was your pick!`);
+                buzz([100, 60, 100]);
+              }
+            }
           };
 
           // the host is the referee: songs at or below the kill score go
@@ -771,7 +1024,7 @@ function Votify() {
             }
             if (s === 0 && queued.length === 0) {
               try {
-                await addTrackToQueue(token, t.id);
+                await addTrackToQueue(refereeToken, t.id);
               } catch (e) {
                 continue; // no active player yet, try again next tick
               }
@@ -797,61 +1050,32 @@ function Votify() {
               left < DISPATCH_WINDOW_MS &&
               dispatchedFor.current !== playback.item.id
             ) {
-              dispatchedFor.current = playback.item.id;
-              const next = queued[0];
-              try {
-                await addTrackToQueue(token, next.id);
-                await deleteDoc(trackDoc(next.id));
-                logLocked(next);
-              } catch (e) {
-                dispatchedFor.current = null;
-                console.error("Dispatch failed:", e);
+              // claim the handoff in the session doc first, so a host and a
+              // deputy overlapping for a moment can't both send a song
+              const claim = await getDoc(dataRef);
+              if (
+                claim.exists() &&
+                claim.data().dispatchedFor === playback.item.id
+              ) {
+                dispatchedFor.current = playback.item.id;
+              } else {
+                await updateDoc(dataRef, {
+                  dispatchedFor: playback.item.id,
+                });
+                dispatchedFor.current = playback.item.id;
+                const next = queued[0];
+                try {
+                  await addTrackToQueue(refereeToken, next.id);
+                  await deleteDoc(trackDoc(next.id));
+                  logLocked(next);
+                } catch (e) {
+                  dispatchedFor.current = null;
+                  await updateDoc(dataRef, { dispatchedFor: null }).catch(
+                    () => {}
+                  );
+                  console.error("Dispatch failed:", e);
+                }
               }
-            }
-          }
-        } else {
-          const snap = await getDoc(dataRef);
-          const data = snap.data();
-          if (!data) return;
-          if (data.hostToken && data.hostToken !== hostToken && !cancelled) {
-            setHostToken(data.hostToken);
-          }
-          const borrow = data.hostToken || hostToken;
-          if (data.nowPlaying && borrow && lastNowPlayingId.current !== data.nowPlaying) {
-            try {
-              const details = await getTrack(borrow, data.nowPlaying);
-              if (!cancelled) {
-                setNowPlaying(details);
-                // only mark it handled once the lookup worked, so a failed
-                // fetch right after a refresh retries on the next tick
-                lastNowPlayingId.current = data.nowPlaying;
-              }
-            } catch (e) {
-              console.error("Now playing lookup failed:", e);
-            }
-          }
-          if (!cancelled) setEndsAt(data.endsAt || null);
-          const mode = data.orderMode || "added";
-          if (!cancelled && mode !== orderModeRef.current) {
-            setOrderMode(mode);
-          }
-          const rules = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-          if (
-            !cancelled &&
-            JSON.stringify(rules) !== JSON.stringify(settingsRef.current)
-          ) {
-            setSettings(rules);
-          }
-          const locked = data.lastLocked;
-          if (locked && locked.at && !cancelled) {
-            const ms =
-              typeof locked.at.toDate === "function"
-                ? locked.at.toDate().getTime()
-                : 0;
-            // only flash fresh dispatches, and each one only once
-            if (ms > lastLockedAt.current && Date.now() - ms < 20000) {
-              lastLockedAt.current = ms;
-              showLocked(locked.name);
             }
           }
         }
@@ -866,6 +1090,7 @@ function Votify() {
       cancelled = true;
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, token, hostToken, sessionID, user]);
 
   const logout = () => {
@@ -908,6 +1133,16 @@ function Votify() {
   const handleStartSession = async () => {
     if (!token || !user) return;
     try {
+      // one room per account: if this Spotify account already has a session
+      // open anywhere (this device or another), close it first
+      const registry = doc(votifyDb, "votify:hosts", spotifyId);
+      try {
+        const reg = await getDoc(registry);
+        if (reg.exists() && reg.data().sessionID) {
+          await cleanupSession(reg.data().sessionID);
+        }
+      } catch (e) {}
+
       const id = String(Math.floor(1000 + Math.random() * 9000));
       await setDoc(doc(votifyDb, `${id}:data`, id), {
         sessionID: id,
@@ -918,6 +1153,7 @@ function Votify() {
         settings: DEFAULT_SETTINGS,
       });
       await setDoc(memberDoc(id), { name: user, host: true });
+      setDoc(registry, { sessionID: id, at: new Date() }).catch(() => {});
 
       // tidy up whatever rooms this browser hosted before
       let previous = [];
@@ -947,8 +1183,9 @@ function Votify() {
 
   const handleJoinSession = async () => {
     const id = sessionIdInput.trim();
-    if (!id) return;
+    if (!id || joining) return;
     const name = guestName.trim() || randomGuest();
+    setJoining(true);
     try {
       const snap = await getDoc(doc(votifyDb, `${id}:data`, id));
       if (!snap.exists()) {
@@ -999,6 +1236,8 @@ function Votify() {
     } catch (e) {
       console.error("Join session failed:", e);
       setError("Couldn't join that session. Try again.");
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -1009,6 +1248,12 @@ function Votify() {
       );
       if (!sure) return;
     }
+    leaveSeat();
+  };
+
+  // drop the current seat without asking; also used when the room turns out
+  // to have been closed from somewhere else
+  const leaveSeat = () => {
     const wasGuest = role === "guest";
     if (sessionID) deleteDoc(memberDoc(sessionID)).catch(() => {});
     setSessionID("");
@@ -1028,7 +1273,15 @@ function Votify() {
     setNpLiked(null);
     setLockedIn(null);
     setSaveState({ status: "idle", url: "" });
+    setHostAway(false);
+    setAutopilot(false);
+    setToast(null);
+    setJoining(false);
+    alertedIce.current.clear();
+    lastBeatWrite.current = 0;
+    lastSeenWrite.current = 0;
     lastLockedAt.current = 0;
+    missingRoom.current = 0;
     setNomTab("search");
     setPlaylists(null);
     setActivePlaylist(null);
@@ -1058,9 +1311,27 @@ function Votify() {
       setResults(await searchTracks(apiToken, searchKey.trim()));
     } catch (err) {
       console.error("Search failed:", err);
-      setError("Search failed. Try again.");
+      notify("Search failed. Try again.");
     }
   };
+
+  // 6b. Search as you type: results follow the box after a short pause.
+  useEffect(() => {
+    if (!searchOpen || nomTab !== "search") return undefined;
+    const q = searchKey.trim();
+    if (!apiToken || !q) {
+      setResults([]);
+      return undefined;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setResults(await searchTracks(apiToken, q));
+      } catch (e) {
+        console.error("Search failed:", e);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchKey, searchOpen, nomTab, apiToken]);
 
   // nominating counts as your upvote, so a new song goes straight to the queue
   const handleNominate = async (track) => {
@@ -1081,14 +1352,29 @@ function Votify() {
               : 0;
           if (Date.now() - ms < cooldownMs) {
             const wait = Math.ceil((cooldownMs - (Date.now() - ms)) / 60000);
-            setError(
+            notify(
               `The room already voted "${track.name}" off — it can come back in ${wait} min.`
             );
             return;
           }
         }
       }
-      setError(null);
+
+      // already in the room? give it your upvote instead of resetting it
+      const existSnap = await getDoc(
+        doc(votifyDb, `${sessionID}:tracks`, track.id)
+      );
+      if (existSnap.exists()) {
+        const existing = { id: track.id, ...existSnap.data() };
+        if (voterId === (existing.nominatedById || existing.nominatedBy)) {
+          notify("That one's already your nomination.");
+        } else {
+          castVote(existing, true);
+          notify(`"${track.name}" is already queued — gave it your upvote.`);
+        }
+        return;
+      }
+
       await setDoc(doc(votifyDb, `${sessionID}:tracks`, track.id), {
         trackID: track.id,
         nominatedBy: user,
@@ -1101,7 +1387,7 @@ function Votify() {
       });
     } catch (e) {
       console.error("Nominate failed:", e);
-      setError("Couldn't nominate that track.");
+      notify("Couldn't nominate that track. Try again.");
     }
   };
 
@@ -1127,8 +1413,22 @@ function Votify() {
         update.penalizedBy = [];
       }
     }
+    // show the vote immediately; the server echo confirms it a beat later
+    setNominatedTracks((prev) =>
+      prev.map((t) => {
+        if (t.id !== track.id) return t;
+        const ups = (t.upvotes || []).filter((u) => u !== voterId);
+        const downs = (t.downvotes || []).filter((u) => u !== voterId);
+        if (up) ups.push(voterId);
+        else downs.push(voterId);
+        return { ...t, upvotes: ups, downvotes: downs };
+      })
+    );
     updateDoc(doc(votifyDb, `${sessionID}:tracks`, track.id), update).catch(
-      (e) => console.error("Vote failed:", e)
+      (e) => {
+        console.error("Vote failed:", e);
+        notify("That vote didn't go through — try again.");
+      }
     );
   };
 
@@ -1293,11 +1593,11 @@ function Votify() {
   // logged-in listeners can act on the current song with their own account
   const actError = (e, what) => {
     if (e.response && e.response.status === 403) {
-      setError(
+      notify(
         `Your Spotify login can't ${what} yet — log out and back in to grant it.`
       );
     } else {
-      setError(`Couldn't ${what}. Try again.`);
+      notify(`Couldn't ${what}. Try again.`);
     }
   };
 
@@ -1397,10 +1697,17 @@ function Votify() {
                 Enter a code to nominate and vote — no login needed.
                 {token && " Enter your own room's code to take it back as host."}
               </p>
-              <div className="votify-join-fields">
+              <form
+                className="votify-join-fields"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleJoinSession();
+                }}
+              >
                 <input
                   className="votify-input"
                   type="text"
+                  ref={nameInputRef}
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder="Your name"
@@ -1414,11 +1721,15 @@ function Votify() {
                     onChange={(e) => setSessionIdInput(e.target.value)}
                     placeholder="Session code"
                   />
-                  <button className="votify-btn" onClick={handleJoinSession}>
-                    Join
+                  <button
+                    className="votify-btn"
+                    type="submit"
+                    disabled={joining}
+                  >
+                    {joining ? "Joining…" : "Join"}
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
 
             {token && (
@@ -1450,7 +1761,7 @@ function Votify() {
                   onClick={() => setShowMembers((v) => !v)}
                   title="Who's here"
                 >
-                  <FaUsers /> {members.length}
+                  <FaUsers /> {activeMembers.length}
                 </button>
                 {role === "host" && (
                   <button
@@ -1493,16 +1804,24 @@ function Votify() {
             {showMembers && (
               <div className="votify-members">
                 <span className="section-label">
-                  {members.length} in the room
+                  {activeMembers.length} in the room
                 </span>
                 <ul>
-                  {members.map((m) => (
+                  {activeMembers.map((m) => (
                     <li key={m.id}>
                       {m.name}
                       {m.host && <span className="votify-host-tag">host</span>}
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {(hostAway || (autopilot && role === "guest")) && (
+              <div className={"votify-away" + (autopilot ? " autopilot" : "")}>
+                {autopilot
+                  ? "The host stepped away — the room is running on autopilot until they're back."
+                  : "The host stepped away. Votes still count; the queue picks back up when they return."}
               </div>
             )}
 
@@ -1577,11 +1896,8 @@ function Votify() {
                         type="text"
                         value={searchKey}
                         onChange={(e) => setSearchKey(e.target.value)}
-                        placeholder="Search Spotify for a track..."
+                        placeholder="Start typing to search Spotify..."
                       />
-                      <button className="votify-btn" type="submit">
-                        Search
-                      </button>
                     </form>
                     {!apiToken && (
                       <p className="votify-note">
@@ -2066,6 +2382,8 @@ function Votify() {
           </div>
         </div>
       )}
+
+      {toast && <div className="votify-toast">{toast}</div>}
     </div>
   );
 }

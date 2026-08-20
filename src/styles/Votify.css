@@ -1249,3 +1249,112 @@
   border-color: #090;
   background: #fff;
 }
+
+/* QoL: progress bar, yours badge, away banner, toast */
+.votify-now-playing {
+  position: relative;
+  overflow: hidden;
+}
+
+.votify-np-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--votify);
+  opacity: 0.75;
+  transition: width 1s linear;
+}
+
+.votify-mine-tag {
+  margin-left: 8px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--votify);
+  background: var(--votify-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: middle;
+}
+
+.votify-away {
+  background: rgba(245, 158, 11, 0.09);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+.votify-away.autopilot {
+  background: var(--votify-soft);
+  border-color: var(--votify);
+}
+
+.votify-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 300;
+  max-width: min(92vw, 480px);
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 11px 20px;
+  font-size: 0.92rem;
+  box-shadow: var(--shadow-md);
+  animation: votify-toast-up 0.25s ease;
+}
+
+@keyframes votify-toast-up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+[data-style="craigslist"] .votify-mine-tag {
+  background: none;
+  color: #090;
+  padding: 0;
+}
+
+[data-style="craigslist"] .votify-mine-tag::before {
+  content: "(";
+}
+
+[data-style="craigslist"] .votify-mine-tag::after {
+  content: ")";
+}
+
+[data-style="craigslist"] .votify-away {
+  background: #fff;
+  border: 1px dashed #999;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-toast {
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+[data-style="craigslist"] .votify-np-bar {
+  background: #090;
+}
+
+[data-style="craigslist"] .votify-np-btn {
+  background: #ececec;
+  border: 1px solid #999;
+  color: #000;
+}

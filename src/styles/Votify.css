@@ -1,0 +1,540 @@
+.votify-page {
+  --votify: #4f46e5;
+  --votify-soft: rgba(79, 70, 229, 0.12);
+  padding-bottom: 72px;
+}
+
+.votify-hero {
+  background: linear-gradient(
+    180deg,
+    rgba(79, 70, 229, 0.1) 0%,
+    var(--bg) 100%
+  );
+  padding: 56px 0 36px;
+  margin-bottom: 40px;
+}
+
+.votify-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--votify);
+}
+
+.votify-hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin: 10px 0 14px;
+}
+
+.votify-hero p {
+  color: var(--text-soft);
+  font-size: 1.08rem;
+  max-width: 620px;
+}
+
+.votify-error {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: #b91c1c;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+}
+
+/* Shared card + button styles */
+.votify-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 28px;
+}
+
+.votify-card h2 {
+  font-size: 1.2rem;
+  margin-bottom: 6px;
+}
+
+.votify-card p {
+  color: var(--text-soft);
+  font-size: 0.98rem;
+  margin-bottom: 18px;
+}
+
+.votify-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--votify);
+  border: none;
+  border-radius: 999px;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: filter 0.18s ease, transform 0.18s ease;
+}
+
+.votify-btn:hover {
+  filter: brightness(1.08);
+}
+
+.votify-btn:active {
+  transform: translateY(1px);
+}
+
+.votify-link-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 8px 4px;
+  transition: color 0.18s ease;
+}
+
+.votify-link-btn:hover {
+  color: var(--text);
+}
+
+.votify-note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 16px 0 0;
+}
+
+.votify-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 18px;
+  outline: none;
+  transition: border-color 0.18s ease;
+}
+
+.votify-input:focus {
+  border-color: var(--votify);
+}
+
+/* Auth */
+.votify-auth {
+  max-width: 440px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.votify-auth .votify-btn {
+  margin: 0 auto;
+}
+
+/* Lobby */
+.votify-lobby {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.votify-lobby .votify-link-btn {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.votify-join {
+  display: flex;
+  gap: 10px;
+}
+
+.votify-join-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Session */
+.votify-session-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.votify-session-head h2 {
+  font-size: 1.5rem;
+  margin-top: 6px;
+}
+
+.votify-code {
+  color: var(--votify);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+.votify-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Now playing */
+.votify-now-playing {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 20px;
+  margin-bottom: 28px;
+}
+
+.votify-np-art {
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.votify-np-status {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--votify);
+  margin-bottom: 6px;
+}
+
+.votify-np-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.votify-np-artist {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+.votify-np-timer {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Queue position + order toggle */
+.votify-pos {
+  width: 24px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.votify-order {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.votify-order-btn {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.votify-order-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.votify-order-btn.active {
+  border-color: var(--brand);
+  color: var(--brand-700);
+  background: var(--brand-soft);
+}
+
+.votify-order-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Thin ice */
+.votify-ice {
+  margin-top: 40px;
+}
+
+.votify-ice .votify-nom {
+  border-style: dashed;
+}
+
+/* Footnote */
+.votify-footnote {
+  margin-top: 64px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* Search */
+.votify-search {
+  position: relative;
+  margin-bottom: 28px;
+}
+
+.votify-dismiss {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.votify-dismiss:hover {
+  color: var(--text);
+  background: var(--bg-alt);
+}
+
+.votify-search .votify-search-form {
+  margin-right: 36px;
+}
+
+.votify-search-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.votify-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.votify-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.votify-result-art {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.votify-result-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.votify-result-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.votify-result-artist {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.votify-nominate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--votify);
+  background: var(--votify-soft);
+  border: none;
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s ease, opacity 0.18s ease;
+}
+
+.votify-nominate-btn:hover:not(:disabled) {
+  background: rgba(79, 70, 229, 0.2);
+}
+
+.votify-nominate-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Nominations */
+.votify-count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.votify-empty {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 24px 0;
+}
+
+.votify-noms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.votify-nom {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.votify-nom-art {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.votify-nom-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.votify-nom-title {
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.votify-nom-artist {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.votify-nom-timer {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.votify-vote {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.votify-vote-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.votify-vote-btn.up:hover:not(:disabled),
+.votify-vote-btn.up.active {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(22, 163, 74, 0.5);
+  color: #16a34a;
+}
+
+.votify-vote-btn.down:hover:not(:disabled),
+.votify-vote-btn.down.active {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #dc2626;
+}
+
+.votify-vote-btn:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.votify-score {
+  min-width: 30px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .votify-lobby {
+    grid-template-columns: 1fr;
+  }
+  .votify-results {
+    grid-template-columns: 1fr;
+  }
+  .votify-nom {
+    flex-wrap: wrap;
+  }
+}
